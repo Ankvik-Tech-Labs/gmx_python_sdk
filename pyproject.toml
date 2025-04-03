@@ -22,7 +22,7 @@ include = ["gmx_python_sdk", "gmx_python_sdk.*"]
 namespaces = false
 
 [tool.poetry.dependencies]
-python = ">= 3.10.4"
+python = ">=3.10.4,<4"
 numpy = ">= 1.26.3"
 hexbytes = ">= 0.3.1"
 web3 = ">= 6.10.0"
