@@ -4,3 +4,4 @@
 *.csv
 *.json
 poetry.lock
+.env
