@@ -5,7 +5,7 @@ description = "A python based SDK developed for interacting with GMX v2"
 
 authors = [
   "snipermonke01 <snipermonke01@proton.me>",
-  "alienf33t <alienf33t@yahoo.com>"
+  "alienf33t <alienf33t@yahoo.com>",
   "aviksaikat <github.maturity983@passinbox.com>"
 ]
 maintainers = [
