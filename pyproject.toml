@@ -10,13 +10,18 @@ authors = [
 ]
 maintainers = [
   "snipermonke01 <snipermonke01@proton.me>",
-  "alienf33t <alienf33t@yahoo.com>"
+  "alienf33t <alienf33t@yahoo.com>",
+  "aviksaikat <github.maturity983@passinbox.com>"
 ]
 
-repository = "https://github.com/snipermonke01/gmx_python_sdk"
+repository = "https://github.com/Ankvik-Tech-Labs/gmx_python_sdk"
 
 readme = "README.md"
 license = "MIT"
+
+[tool.poetry.group.dev.dependencies]
+dotenv = "^0.9.9"
+rich = "^14.0.0"
 
 [tool.setuptools.packages.find]
 include = ["gmx_python_sdk", "gmx_python_sdk.*"]

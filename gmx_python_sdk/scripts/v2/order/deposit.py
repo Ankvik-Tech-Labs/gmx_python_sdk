@@ -303,7 +303,7 @@ class Deposit:
         Create Order
         """
         try:
-            return self._exchange_router_contract_obj.encodeABI(
+            return self._exchange_router_contract_obj.encode_abi(
                 fn_name="createDeposit",
                 args=[arguments],
             )
@@ -318,7 +318,7 @@ class Deposit:
         Send tokens
         """
         try:
-            return self._exchange_router_contract_obj.encodeABI(
+            return self._exchange_router_contract_obj.encode_abi(
                 fn_name="sendTokens",
                 args=(
                     token_address,
@@ -341,7 +341,7 @@ class Deposit:
         Send WNT
         """
         try:
-            return self._exchange_router_contract_obj.encodeABI(
+            return self._exchange_router_contract_obj.encode_abi(
                 fn_name='sendWnt',
                 args=(
                     "0xF89e77e8Dc11691C9e8757e84aaFbCD8A67d7A55",
@@ -404,7 +404,10 @@ class Deposit:
             "token_prices_tuple": prices,
             "long_token_amount": self.long_token_amount,
             "short_token_amount": self.short_token_amount,
-            "ui_fee_receiver": "0x0000000000000000000000000000000000000000"
+            "ui_fee_receiver": "0x0000000000000000000000000000000000000000",
+            # 0: swap, 1: shift, 2: atomic withdraw, 3: deposit, 4: withdrawl, 5: atomic swap
+            "swap_pricing_type": 3,
+            "include_virtual_inventory_impact": False,
         }
 
         return get_estimated_deposit_amount_out(self.config, parameters)

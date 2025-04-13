@@ -74,7 +74,7 @@ contract_map = {
         },
         "syntheticsreader":
         {
-            "contract_address": "0x5Ca84c34a381434786738735265b9f3FD814b824",
+            "contract_address": "0x0537C767cDAC0726c76Bb89e92904fe28fd02fE1",
             "abi_path": "contracts/arbitrum/syntheticsreader.json"
         },
         "syntheticsrouter":
@@ -580,6 +580,8 @@ def get_estimated_deposit_amount_out(config, params: dict):
         params['long_token_amount'],
         params['short_token_amount'],
         params['ui_fee_receiver'],
+        params['swap_pricing_type'],
+        params['include_virtual_inventory_impact']
     ).call()
 
     return output
