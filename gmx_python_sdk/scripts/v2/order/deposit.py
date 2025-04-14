@@ -132,7 +132,7 @@ class Deposit:
 
             try:
                 txn = signed_txn.rawTransaction
-            except TypeError:
+            except AttributeError:
                 txn = signed_txn.raw_transaction
 
             tx_hash = self._connection.eth.send_raw_transaction(
@@ -303,7 +303,7 @@ class Deposit:
         Create Order
         """
         try:
-            return self._exchange_router_contract_obj.encode_abi(
+            return self._exchange_router_contract_obj.encodeABI(
                 "createDeposit",
                 args=[arguments],
             )
@@ -318,7 +318,7 @@ class Deposit:
         Send tokens
         """
         try:
-            return self._exchange_router_contract_obj.encode_abi(
+            return self._exchange_router_contract_obj.encodeABI(
                 "sendTokens",
                 args=(
                     token_address,
@@ -341,7 +341,7 @@ class Deposit:
         Send WNT
         """
         try:
-            return self._exchange_router_contract_obj.encode_abi(
+            return self._exchange_router_contract_obj.encodeABI(
                 'sendWnt',
                 args=(
                     "0xF89e77e8Dc11691C9e8757e84aaFbCD8A67d7A55",
