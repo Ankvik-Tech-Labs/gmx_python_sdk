@@ -304,12 +304,12 @@ class Deposit:
         """
         try:
             return self._exchange_router_contract_obj.encode_abi(
-                fn_name="createDeposit",
+                "createDeposit",
                 args=[arguments],
             )
         except TypeError:
             return self._exchange_router_contract_obj.encode_abi(
-                fn_name="createDeposit",
+                "createDeposit",
                 args=[arguments],
             )
 
@@ -319,7 +319,7 @@ class Deposit:
         """
         try:
             return self._exchange_router_contract_obj.encode_abi(
-                fn_name="sendTokens",
+                "sendTokens",
                 args=(
                     token_address,
                     '0xF89e77e8Dc11691C9e8757e84aaFbCD8A67d7A55',
@@ -328,7 +328,7 @@ class Deposit:
             )
         except TypeError:
             return self._exchange_router_contract_obj.encode_abi(
-                fn_name="sendTokens",
+                "sendTokens",
                 args=(
                     token_address,
                     '0xF89e77e8Dc11691C9e8757e84aaFbCD8A67d7A55',
@@ -342,7 +342,7 @@ class Deposit:
         """
         try:
             return self._exchange_router_contract_obj.encode_abi(
-                fn_name='sendWnt',
+                'sendWnt',
                 args=(
                     "0xF89e77e8Dc11691C9e8757e84aaFbCD8A67d7A55",
                     amount
@@ -350,7 +350,7 @@ class Deposit:
             )
         except TypeError:
             return self._exchange_router_contract_obj.encode_abi(
-                fn_name='sendWnt',
+                'sendWnt',
                 args=(
                     "0xF89e77e8Dc11691C9e8757e84aaFbCD8A67d7A55",
                     amount
