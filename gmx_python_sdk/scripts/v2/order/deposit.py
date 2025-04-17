@@ -307,7 +307,7 @@ class Deposit:
                 "createDeposit",
                 args=[arguments],
             )
-        except TypeError:
+        except AttributeError:
             return self._exchange_router_contract_obj.encode_abi(
                 "createDeposit",
                 args=[arguments],
@@ -326,7 +326,7 @@ class Deposit:
                     amount
                 ),
             )
-        except TypeError:
+        except AttributeError:
             return self._exchange_router_contract_obj.encode_abi(
                 "sendTokens",
                 args=(
@@ -348,7 +348,7 @@ class Deposit:
                     amount
                 )
             )
-        except TypeError:
+        except AttributeError:
             return self._exchange_router_contract_obj.encode_abi(
                 'sendWnt',
                 args=(

@@ -122,7 +122,7 @@ contract_map = {
         },
         "syntheticsreader":
         {
-            "contract_address": "0xBAD04dDcc5CC284A86493aFA75D2BEb970C72216",
+            "contract_address": "0x618fCEe30D9A26e8533C3B244CAd2D6486AFf655",
             "abi_path": "contracts/avalanche/syntheticsreader.json"
         },
         "syntheticsrouter":
