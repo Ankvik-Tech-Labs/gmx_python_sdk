@@ -310,7 +310,7 @@ def get_tokens_address_dict(chain: str):
     Parameters
     ----------
     chain : str
-        avalanche of arbitrum.
+        avalanche or arbitrum.
 
     Returns
     -------

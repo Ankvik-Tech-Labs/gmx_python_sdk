@@ -1,3 +1,4 @@
+from curses import raw
 import logging
 import numpy as np
 
@@ -6,7 +7,6 @@ from .get_oracle_prices import OraclePrices
 
 from ..gmx_utils import (get_tokens_address_dict, convert_to_checksum_address)
 
-chain = 'arbitrum'
 
 
 class GetOpenPositions(GetData):
@@ -83,9 +83,8 @@ class GetOpenPositions(GetData):
             a processed dictionary containing info on the positions.
         """
         market_info = self.markets.info[raw_position[0][1]]
-
-        chain_tokens = get_tokens_address_dict(chain)
-
+        chain_tokens = get_tokens_address_dict(self.config.chain)
+        
         entry_price = (
             raw_position[1][0] / raw_position[1][1]
         ) / 10 ** (
@@ -99,7 +98,7 @@ class GetOpenPositions(GetData):
                 raw_position[0][2]
             ]['decimals']
         )
-        prices = OraclePrices(chain=chain).get_recent_prices()
+        prices = OraclePrices(chain=self.config.chain).get_recent_prices()
         mark_price = np.median(
             [
                 float(
