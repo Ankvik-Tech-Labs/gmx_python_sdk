@@ -1,4 +1,3 @@
-from curses import raw
 import logging
 import numpy as np
 
@@ -40,10 +39,7 @@ class GetOpenPositions(GetData):
 
         if len(raw_positions) == 0:
             logging.info(
-                'No positions open for address: "{}"" on {}.'.format(
-                    self.address,
-                    self.config.chain.title()
-                )
+                f'No positions open for address: "{self.address}"" on {self.config.chain.title()}.'
             )
         processed_positions = {}
 
@@ -52,13 +48,13 @@ class GetOpenPositions(GetData):
                 processed_position = self._get_data_processing(raw_position)
 
                 # TODO - maybe a better way of building the key?
-                if processed_position['is_long']:
-                    direction = 'long'
+                if processed_position["is_long"]:
+                    direction = "long"
                 else:
-                    direction = 'short'
+                    direction = "short"
 
                 key = "{}_{}".format(
-                    processed_position['market_symbol'][0],
+                    processed_position["market_symbol"][0],
                     direction
                 )
                 processed_positions[key] = processed_position
@@ -84,11 +80,11 @@ class GetOpenPositions(GetData):
         """
         market_info = self.markets.info[raw_position[0][1]]
         chain_tokens = get_tokens_address_dict(self.config.chain)
-        
+
         entry_price = (
             raw_position[1][0] / raw_position[1][1]
         ) / 10 ** (
-            30 - chain_tokens[market_info['index_token_address']]['decimals']
+            30 - chain_tokens[market_info["index_token_address"]]["decimals"]
         )
 
         leverage = (
@@ -96,29 +92,29 @@ class GetOpenPositions(GetData):
         ) / (
             raw_position[1][2] / 10 ** chain_tokens[
                 raw_position[0][2]
-            ]['decimals']
+            ]["decimals"]
         )
         prices = OraclePrices(chain=self.config.chain).get_recent_prices()
         mark_price = np.median(
             [
                 float(
-                    prices[market_info['index_token_address']]['maxPriceFull']
+                    prices[market_info["index_token_address"]]["maxPriceFull"]
                 ),
                 float(
-                    prices[market_info['index_token_address']]['minPriceFull']
+                    prices[market_info["index_token_address"]]["minPriceFull"]
                 )
             ]
         ) / 10 ** (
-            30 - chain_tokens[market_info['index_token_address']]['decimals']
+            30 - chain_tokens[market_info["index_token_address"]]["decimals"]
         )
 
         return {
             "account": raw_position[0][0],
             "market": raw_position[0][1],
             "market_symbol": (
-                self.markets.info[raw_position[0][1]]['market_symbol'],
+                self.markets.info[raw_position[0][1]]["market_symbol"],
             ),
-            "collateral_token": chain_tokens[raw_position[0][2]]['symbol'],
+            "collateral_token": chain_tokens[raw_position[0][2]]["symbol"],
             "position_size": raw_position[1][0] / 10**30,
             "size_in_tokens": raw_position[1][1],
             "entry_price": (
@@ -126,14 +122,14 @@ class GetOpenPositions(GetData):
                     raw_position[1][0] / raw_position[1][1]
                 ) / 10 ** (
                     30 - chain_tokens[
-                        market_info['index_token_address']
-                    ]['decimals']
+                        market_info["index_token_address"]
+                    ]["decimals"]
                 )
             ),
             "inital_collateral_amount": raw_position[1][2],
             "inital_collateral_amount_usd": (
                 raw_position[1][2]
-                / 10 ** chain_tokens[raw_position[0][2]]['decimals'],
+                / 10 ** chain_tokens[raw_position[0][2]]["decimals"],
             ),
             "leverage": leverage,
             "borrowing_factor": raw_position[1][3],
@@ -153,7 +149,7 @@ class GetOpenPositions(GetData):
 
 if __name__ == "__main__":
     address = "0x99f5585dcc32e2238634f11f32d9be9bd5e98b49"
-    positions = GetOpenPositions(chain='arbitrum', address=address).get_data()
+    positions = GetOpenPositions(chain="arbitrum", address=address).get_data()
 
-    for position in positions:
-        print(positions[position])
+    for _position in positions:
+        pass

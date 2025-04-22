@@ -32,7 +32,7 @@ class GetFundingFee(GetData):
                     os.path.join(
                         base_dir,
                         "data_store",
-                        "{}_open_interest.json".format(self.config.chain)
+                        f"{self.config.chain}_open_interest.json"
                     )
                 )
             )
@@ -41,7 +41,6 @@ class GetFundingFee(GetData):
                 config=self.config
             ).get_data(to_json=False)
 
-        print("\nGMX v2 Funding Rates (% per hour)")
 
         # define empty lists to pass to zip iterater later on
         mapper = []
@@ -65,16 +64,10 @@ class GetFundingFee(GetData):
             mapper.append(symbol)
             output_list.append(output)
             long_interest_usd_list = (
-                long_interest_usd_list +
-                [
-                    open_interest['long'][symbol] * 10 ** 30
-                ]
+                [*long_interest_usd_list, open_interest["long"][symbol] * 10 ** 30]
             )
             short_interest_usd_list = (
-                short_interest_usd_list +
-                [
-                    open_interest['short'][symbol] * 10 ** 30
-                ]
+                [*short_interest_usd_list, open_interest["short"][symbol] * 10 ** 30]
             )
 
         # Multithreaded call on contract
@@ -90,7 +83,6 @@ class GetFundingFee(GetData):
             short_interest_usd_list,
             mapper
         ):
-            print("\n{}".format(symbol))
 
             market_info_dict = {
                 "market_token": output[0][0],
@@ -110,7 +102,6 @@ class GetFundingFee(GetData):
                 long_interest_usd,
                 short_interest_usd
             )
-            print("Long funding hrly rate {:.4f}%".format(long_funding_fee))
 
             short_funding_fee = get_funding_factor_per_period(
                 market_info_dict,
@@ -119,12 +110,11 @@ class GetFundingFee(GetData):
                 long_interest_usd,
                 short_interest_usd
             )
-            print("Short funding hrly rate {:.4f}%".format(short_funding_fee))
 
-            self.output['long'][symbol] = long_funding_fee
-            self.output['short'][symbol] = short_funding_fee
+            self.output["long"][symbol] = long_funding_fee
+            self.output["short"][symbol] = short_funding_fee
 
-        self.output['parameter'] = "funding_apr"
+        self.output["parameter"] = "funding_apr"
 
         return self.output
 

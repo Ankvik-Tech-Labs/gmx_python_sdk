@@ -56,12 +56,12 @@ class OraclePrices:
 
         """
         processed = {}
-        for i in output['signedPrices']:
-            processed[i['tokenAddress']] = i
+        for i in output["signedPrices"]:
+            processed[i["tokenAddress"]] = i
 
         return processed
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     pass

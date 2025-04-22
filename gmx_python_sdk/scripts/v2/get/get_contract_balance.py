@@ -32,18 +32,17 @@ class GetPoolTVL(GetData):
         pool_tvl_dict = {}
 
         for market in markets:
-            print("\n" + markets[market]['market_symbol'])
 
-            long_token_address = markets[market]['long_token_address']
+            long_token_address = markets[market]["long_token_address"]
 
-            short_token_address = markets[market]['short_token_address']
+            short_token_address = markets[market]["short_token_address"]
             long_token_balance, short_token_balance = self._query_balances(
                 market,
                 long_token_address,
                 short_token_address
             )
             oracle_precision = 10 ** (
-                30 - markets[market]['long_token_metadata']['decimals']
+                30 - markets[market]["long_token_metadata"]["decimals"]
             )
 
             long_usd_balance = self._calculate_usd_value(
@@ -52,23 +51,18 @@ class GetPoolTVL(GetData):
                 oracle_precision
             )
 
-            dictionary_key = markets[market]['market_symbol']
+            dictionary_key = markets[market]["market_symbol"]
 
             pool_tvl_dict[dictionary_key] = {
-                'total_tvl': long_usd_balance + short_token_balance,
-                'long_token': markets[market]['long_token_address'],
-                'short_token': markets[market]['short_token_address']
+                "total_tvl": long_usd_balance + short_token_balance,
+                "long_token": markets[market]["long_token_address"],
+                "short_token": markets[market]["short_token_address"]
             }
 
-            print(
-                "Pool USD Value: ${}".format(
-                    long_usd_balance + short_token_balance
-                )
-            )
 
         if to_json:
             save_json_file_to_datastore(
-                "{}_pool_tvl.json".format(self.config.chain),
+                f"{self.config.chain}_pool_tvl.json",
                 pool_tvl_dict
             )
         else:
@@ -144,22 +138,21 @@ class GetPoolTVL(GetData):
                     float(
                         self.oracle_prices_dict()[
                             contract_address
-                        ]['maxPriceFull']
+                        ]["maxPriceFull"]
                     ) / oracle_precision,
                     float(
                         self.oracle_prices_dict()[
                             contract_address
-                        ]['minPriceFull']
+                        ]["minPriceFull"]
                     ) / oracle_precision
                 ]
             )
             return token_price * token_balance
         except KeyError:
-            print("Contract address not known")
             return token_balance
 
 
 if __name__ == "__main__":
     # chain = sys.argv[1]
     # chain = 'arbitrum'
-    pool_dict = GetPoolTVL(chain='arbitrum').get_data(to_json=False)
+    pool_dict = GetPoolTVL(chain="arbitrum").get_data(to_json=False)

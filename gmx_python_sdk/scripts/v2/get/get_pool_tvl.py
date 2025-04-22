@@ -42,11 +42,10 @@ class GetPoolTVL:
         }
 
         for market in markets:
-            print("\n" + markets[market]['market_symbol'])
 
-            index_token_address = markets[market]['index_token_address']
-            long_token_metadata = markets[market]['long_token_metadata']
-            short_token_metadata = markets[market]['short_token_metadata']
+            index_token_address = markets[market]["index_token_address"]
+            long_token_metadata = markets[market]["long_token_metadata"]
+            short_token_metadata = markets[market]["short_token_metadata"]
 
             long_token_balance, short_token_balance = self._query_balances(
                 market,
@@ -54,8 +53,8 @@ class GetPoolTVL:
                 short_token_metadata
             )
 
-            long_precision = 10 ** long_token_metadata['decimals']
-            short_precision = 10 ** short_token_metadata['decimals']
+            long_precision = 10 ** long_token_metadata["decimals"]
+            short_precision = 10 ** short_token_metadata["decimals"]
             long_token_balance = long_token_balance / long_precision
             short_token_balance = short_token_balance / short_precision
 
@@ -63,12 +62,12 @@ class GetPoolTVL:
             # index token for price
             # try:
             #     if markets[market]['market_metadata']['synthetic']:
-            index_token_address = markets[market]['long_token_address']
+            index_token_address = markets[market]["long_token_address"]
             # except KeyError:
             #     pass
 
             oracle_precision = 10 ** (
-                30 - markets[market]['long_token_metadata']['decimals']
+                30 - markets[market]["long_token_metadata"]["decimals"]
             )
             long_usd_balance = self._calculate_usd_value(
                 index_token_address,
@@ -77,34 +76,29 @@ class GetPoolTVL:
             )
             short_usd_balance = short_token_balance
 
-            dictionary_key = markets[market]['market_symbol']
+            dictionary_key = markets[market]["market_symbol"]
 
-            pool_tvl_dict['total_tvl'][dictionary_key] = (
+            pool_tvl_dict["total_tvl"][dictionary_key] = (
                 long_usd_balance + short_usd_balance
             )
-            pool_tvl_dict['long_token'][dictionary_key] = (
-                markets[market]['long_token_address']
+            pool_tvl_dict["long_token"][dictionary_key] = (
+                markets[market]["long_token_address"]
             )
-            pool_tvl_dict['short_token'][dictionary_key] = (
-                markets[market]['short_token_address']
+            pool_tvl_dict["short_token"][dictionary_key] = (
+                markets[market]["short_token_address"]
             )
 
-            print(
-                "Pool USD Value: ${}".format(
-                    long_usd_balance + short_usd_balance
-                )
-            )
 
         if to_json:
             save_json_file_to_datastore(
-                "{}_pool_tvl.json".format(self.config.chain),
+                f"{self.config.chain}_pool_tvl.json",
                 pool_tvl_dict
             )
 
         if to_csv:
-            dataframe = make_timestamped_dataframe(pool_tvl_dict['total_tvl'])
+            dataframe = make_timestamped_dataframe(pool_tvl_dict["total_tvl"])
             save_csv_to_datastore(
-                "{}_total_tvl.csv".format(self.config.chain),
+                f"{self.config.chain}_total_tvl.csv",
                 dataframe
             )
         else:
@@ -139,7 +133,7 @@ class GetPoolTVL:
         datastore = get_datastore_contract(self.config)
         pool_amount_hash_data = pool_amount_key(
             market,
-            long_token_metadata['address']
+            long_token_metadata["address"]
         )
         long_token_balance = datastore.functions.getUint(
             pool_amount_hash_data
@@ -148,7 +142,7 @@ class GetPoolTVL:
         datastore = get_datastore_contract(self.config)
         pool_amount_hash_data = pool_amount_key(
             market,
-            short_token_metadata['address']
+            short_token_metadata["address"]
         )
         short_token_balance = datastore.functions.getUint(
             pool_amount_hash_data
@@ -185,12 +179,12 @@ class GetPoolTVL:
                     float(
                         self.oracle_prices_dict()[
                             token_address
-                        ]['maxPriceFull']
+                        ]["maxPriceFull"]
                     ) / oracle_precision,
                     float(
                         self.oracle_prices_dict()[
                             token_address
-                        ]['minPriceFull']
+                        ]["minPriceFull"]
                     ) / oracle_precision
                 ]
             )

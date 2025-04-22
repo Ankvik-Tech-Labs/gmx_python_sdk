@@ -1,6 +1,6 @@
 from .get import GetData
 from ..gmx_utils import (
-    get_reader_contract, contract_map, execute_threading,
+    execute_threading,
     save_json_file_to_datastore, make_timestamped_dataframe,
     save_csv_to_datastore
 )
@@ -103,7 +103,7 @@ class GMPrices(GetData):
         mapper = []
         self._filter_swap_markets()
 
-        for iter, market_key in enumerate(self.markets.info):
+        for _iter, market_key in enumerate(self.markets.info):
             self._get_token_addresses(market_key)
             index_token_address = self.markets.get_index_token_address(
                 market_key
@@ -143,7 +143,7 @@ class GMPrices(GetData):
             self.output[key] = output[0] / 10**30
 
         if self.to_json:
-            filename = "{}_gm_prices.json".format(self.config.chain)
+            filename = f"{self.config.chain}_gm_prices.json"
             save_json_file_to_datastore(
                 filename,
                 self.output
@@ -153,10 +153,10 @@ class GMPrices(GetData):
             dataframe = make_timestamped_dataframe(self.output)
 
             save_csv_to_datastore(
-                "{}_gm_prices.csv".format(self.config.chain),
+                f"{self.config.chain}_gm_prices.csv",
                 dataframe)
 
-        self.output['parameter'] = "gm_prices"
+        self.output["parameter"] = "gm_prices"
         del self.output["long"]
         del self.output["short"]
 

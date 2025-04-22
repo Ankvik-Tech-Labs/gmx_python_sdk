@@ -14,29 +14,29 @@ class Markets:
         self.log = logging.getLogger(__name__)
 
     def get_index_token_address(self, market_key: str) -> str:
-        return self.info[market_key]['index_token_address']
+        return self.info[market_key]["index_token_address"]
 
     def get_long_token_address(self, market_key: str) -> str:
-        return self.info[market_key]['long_token_address']
+        return self.info[market_key]["long_token_address"]
 
     def get_short_token_address(self, market_key: str) -> str:
-        return self.info[market_key]['short_token_address']
+        return self.info[market_key]["short_token_address"]
 
     def get_market_symbol(self, market_key: str) -> str:
-        return self.info[market_key]['market_symbol']
+        return self.info[market_key]["market_symbol"]
 
     def get_decimal_factor(
         self, market_key: str, long: bool = False, short: bool = False
     ) -> int:
         if long:
-            return self.info[market_key]['long_token_metadata']['decimals']
+            return self.info[market_key]["long_token_metadata"]["decimals"]
         elif short:
-            return self.info[market_key]['short_token_metadata']['decimals']
+            return self.info[market_key]["short_token_metadata"]["decimals"]
         else:
-            return self.info[market_key]['market_metadata']['decimals']
+            return self.info[market_key]["market_metadata"]["decimals"]
 
     def is_synthetic(self, market_key: str) -> bool:
-        return self.info[market_key]['market_metadata']['synthetic']
+        return self.info[market_key]["market_metadata"]["synthetic"]
 
     def get_available_markets(self):
         """
@@ -64,7 +64,7 @@ class Markets:
 
         reader_contract = get_reader_contract(self.config)
         data_store_contract_address = (
-            contract_map[self.config.chain]['datastore']['contract_address']
+            contract_map[self.config.chain]["datastore"]["contract_address"]
         )
 
         return reader_contract.functions.getMarkets(
@@ -94,19 +94,19 @@ class Markets:
                     raw_market[1]
                 ):
                     continue
-                market_symbol = token_address_dict[raw_market[1]]['symbol']
+                market_symbol = token_address_dict[raw_market[1]]["symbol"]
 
                 if raw_market[2] == raw_market[3]:
                     market_symbol = f"{market_symbol}2"
                 decoded_markets[raw_market[0]] = {
-                    'gmx_market_address': raw_market[0],
-                    'market_symbol': market_symbol,
-                    'index_token_address': raw_market[1],
-                    'market_metadata': token_address_dict[raw_market[1]],
-                    'long_token_metadata': token_address_dict[raw_market[2]],
-                    'long_token_address': raw_market[2],
-                    'short_token_metadata': token_address_dict[raw_market[3]],
-                    'short_token_address': raw_market[3]
+                    "gmx_market_address": raw_market[0],
+                    "market_symbol": market_symbol,
+                    "index_token_address": raw_market[1],
+                    "market_metadata": token_address_dict[raw_market[1]],
+                    "long_token_metadata": token_address_dict[raw_market[2]],
+                    "long_token_address": raw_market[2],
+                    "short_token_metadata": token_address_dict[raw_market[3]],
+                    "short_token_address": raw_market[3]
                 }
                 if raw_market[0] == "0x0Cf1fb4d1FF67A3D8Ca92c9d6643F8F9be8e03E5":
                     decoded_markets[raw_market[0]]["market_symbol"] = "wstETH"
@@ -122,20 +122,20 @@ class Markets:
                     continue
 
                 decoded_markets[raw_market[0]] = {
-                    'gmx_market_address': raw_market[0],
-                    'market_symbol': 'SWAP {}-{}'.format(
-                        token_address_dict[raw_market[2]]['symbol'],
-                        token_address_dict[raw_market[3]]['symbol']
+                    "gmx_market_address": raw_market[0],
+                    "market_symbol": "SWAP {}-{}".format(
+                        token_address_dict[raw_market[2]]["symbol"],
+                        token_address_dict[raw_market[3]]["symbol"]
                     ),
-                    'index_token_address': raw_market[1],
-                    'market_metadata': {'symbol': 'SWAP {}-{}'.format(
-                        token_address_dict[raw_market[2]]['symbol'],
-                        token_address_dict[raw_market[3]]['symbol']
+                    "index_token_address": raw_market[1],
+                    "market_metadata": {"symbol": "SWAP {}-{}".format(
+                        token_address_dict[raw_market[2]]["symbol"],
+                        token_address_dict[raw_market[3]]["symbol"]
                     )},
-                    'long_token_metadata': token_address_dict[raw_market[2]],
-                    'long_token_address': raw_market[2],
-                    'short_token_metadata': token_address_dict[raw_market[3]],
-                    'short_token_address': raw_market[3]
+                    "long_token_metadata": token_address_dict[raw_market[2]],
+                    "long_token_address": raw_market[2],
+                    "short_token_metadata": token_address_dict[raw_market[3]],
+                    "short_token_address": raw_market[3]
                 }
 
         return decoded_markets
@@ -151,9 +151,8 @@ class Markets:
             return True
         except KeyError:
 
-            print("{} market not live on GMX yet..".format(index_token_address))
             return False
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     pass

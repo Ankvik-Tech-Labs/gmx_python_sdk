@@ -15,6 +15,7 @@ from ..gmx_utils import convert_to_checksum_address, \
 from ..approve_token_for_spend import check_if_approved
 
 from ..gas_utils import get_execution_fee
+from typing import Optional
 
 is_newer_version, version = check_web3_correct_version()
 if is_newer_version:
@@ -29,7 +30,7 @@ class Withdraw:
         market_key: str,
         out_token: str,
         gm_amount: int,
-        max_fee_per_gas: int = None,
+        max_fee_per_gas: Optional[int] = None,
         debug_mode: bool = False,
         execution_buffer: float = 1.1
 
@@ -45,14 +46,13 @@ class Withdraw:
         self.execution_buffer = execution_buffer
 
         if self.debug_mode:
-            logging.info("Execution buffer set to: {:.2f}%".format(
-                (self.execution_buffer - 1) * 100))
+            logging.info(f"Execution buffer set to: {(self.execution_buffer - 1) * 100:.2f}%")
 
         if self.max_fee_per_gas is None:
             block = create_connection(
                 config
-            ).eth.get_block('latest')
-            self.max_fee_per_gas = block['baseFeePerGas'] * 1.35
+            ).eth.get_block("latest")
+            self.max_fee_per_gas = block["baseFeePerGas"] * 1.35
 
         self._exchange_router_contract_obj = get_exchange_router_contract(
             config
@@ -74,7 +74,7 @@ class Withdraw:
         Check for Approval
 
         """
-        spender = contract_map[self.config.chain]["syntheticsrouter"]['contract_address']
+        spender = contract_map[self.config.chain]["syntheticsrouter"]["contract_address"]
 
         check_if_approved(self.config,
                           spender,
@@ -84,54 +84,75 @@ class Withdraw:
                           approve=True)
 
     def _submit_transaction(
-        self, user_wallet_address: str, value_amount: float,
+    self, user_wallet_address: str, value_amount: float,
         multicall_args: list, gas_limits: dict
     ):
         """
         Submit Transaction
+
+        Parameters
+        ----------
+        user_wallet_address : str
+            Address of the user's wallet (used for nonce calculation)
+        value_amount : float
+            Amount of native token to send with the transaction
+        multicall_args : list
+            List of encoded function calls for multicall
+        gas_limits : dict
+            Gas limits for the transaction
+
+        Returns
+        -------
+        str or None
+            Transaction hash if transaction is sent, None in debug mode
         """
         self.log.info("Building transaction...")
 
-        nonce = self._connection.eth.get_transaction_count(
-            user_wallet_address
-        )
+        # Get the signer from config
+        signer = self.config.get_signer()
+
+        try:
+            wallet_address = Web3.to_checksum_address(user_wallet_address)
+        except AttributeError:
+            wallet_address = Web3.toChecksumAddress(user_wallet_address)
+
+        # Ensure the signer address matches the wallet address
+        if signer.get_address().lower() != wallet_address.lower():
+            self.log.warning(
+                f"Signer address {signer.get_address()} doesn't match wallet address {wallet_address}"
+            )
+
+        nonce = self._connection.eth.get_transaction_count(signer.get_address())
 
         raw_txn = self._exchange_router_contract_obj.functions.multicall(
             multicall_args
         ).build_transaction(
             {
-                'value': value_amount,
-                'chainId': self.config.chain_id,
-
-                # TODO - this is NOT correct
-                'gas': (
+                "from": signer.get_address(),
+                "value": value_amount,
+                "chainId": self.config.chain_id,
+                "gas": (
                     self._gas_limits_order_type.call() + self._gas_limits_order_type.call()
                 ),
-                'maxFeePerGas': int(self.max_fee_per_gas),
-                'maxPriorityFeePerGas': 0,
-                'nonce': nonce
+                "maxFeePerGas": int(self.max_fee_per_gas),
+                "maxPriorityFeePerGas": 0,
+                "nonce": nonce
             }
         )
+
         if not self.debug_mode:
+            # Use signer to send the transaction
+            tx_hash = signer.send_transaction(raw_txn)
 
-            signed_txn = self._connection.eth.account.sign_transaction(
-                raw_txn, self.config.private_key
-            )
-
-            try:
-                txn = signed_txn.rawTransaction
-            except TypeError:
-                txn = signed_txn.raw_transaction
-
-            tx_hash = self._connection.eth.send_raw_transaction(
-                txn
-            )
             self.log.info("Txn submitted!")
             self.log.info(
-                "Check status: https://arbiscan.io/tx/{}".format(tx_hash.hex())
+                f"Check status: https://arbiscan.io/tx/{tx_hash.hex()}"
             )
 
             self.log.info("Transaction submitted!")
+            return tx_hash
+
+        return None
 
     def create_withdraw_order(self):
 
@@ -192,26 +213,13 @@ class Withdraw:
         multicall_args = []
 
         # Send gas to withdrawVault
-        multicall_args = multicall_args + [HexBytes(
-            self._send_wnt(
-                int(execution_fee)
-            )
-        )]
+        multicall_args = [*multicall_args, HexBytes(self._send_wnt(int(execution_fee)))]
 
         # Send GM tokens to withdrawVault
-        multicall_args = multicall_args + [HexBytes(
-            self._send_tokens(
-                self.market_key,
-                self.gm_amount
-            )
-        )]
+        multicall_args = [*multicall_args, HexBytes(self._send_tokens(self.market_key, self.gm_amount))]
 
         # Send parameters for our swap
-        multicall_args = multicall_args + [HexBytes(
-            self._create_order(
-                arguments
-            )
-        )]
+        multicall_args = [*multicall_args, HexBytes(self._create_order(arguments))]
 
         self._submit_transaction(
             user_wallet_address,
@@ -228,22 +236,22 @@ class Withdraw:
 
         market = self.all_markets_info[self.market_key]
 
-        if market['long_token_address'] != self.out_token:
+        if market["long_token_address"] != self.out_token:
             try:
                 self.long_token_swap_path, requires_multi_swap = determine_swap_route(
                     self.all_markets_info,
                     self.out_token,
-                    market['long_token_address']
+                    market["long_token_address"]
                 )
             except Exception:
                 pass
 
-        if market['short_token_address'] != self.out_token:
+        if market["short_token_address"] != self.out_token:
             try:
                 self.short_token_swap_path, requires_multi_swap = determine_swap_route(
                     self.all_markets_info,
                     self.out_token,
-                    market['short_token_address']
+                    market["short_token_address"]
                 )
             except Exception:
                 pass
@@ -269,7 +277,7 @@ class Withdraw:
         """
         try:
             return self._exchange_router_contract_obj.encodeABI(
-                fn_name='sendWnt',
+                fn_name="sendWnt",
                 args=(
                     "0x0628D46b5D145f183AdB6Ef1f2c97eD1C4701C55",
                     amount
@@ -277,7 +285,7 @@ class Withdraw:
             )
         except TypeError:
             return self._exchange_router_contract_obj.encode_abi(
-                fn_name='sendWnt',
+                fn_name="sendWnt",
                 args=(
                     "0x0628D46b5D145f183AdB6Ef1f2c97eD1C4701C55",
                     amount
@@ -293,7 +301,7 @@ class Withdraw:
                 fn_name="sendTokens",
                 args=(
                     token_address,
-                    '0x0628D46b5D145f183AdB6Ef1f2c97eD1C4701C55',
+                    "0x0628D46b5D145f183AdB6Ef1f2c97eD1C4701C55",
                     amount
                 ),
             )
@@ -302,7 +310,7 @@ class Withdraw:
                 fn_name="sendTokens",
                 args=(
                     token_address,
-                    '0x0628D46b5D145f183AdB6Ef1f2c97eD1C4701C55',
+                    "0x0628D46b5D145f183AdB6Ef1f2c97eD1C4701C55",
                     amount
                 ),
             )
@@ -320,14 +328,14 @@ class Withdraw:
 
         data_store_contract_address = contract_map[
             self.config.chain
-        ]['datastore']['contract_address']
+        ]["datastore"]["contract_address"]
 
         market = self.all_markets_info[self.market_key]
         oracle_prices_dict = OraclePrices(chain=self.config.chain).get_recent_prices()
 
-        index_token_address = market['index_token_address']
-        long_token_address = market['long_token_address']
-        short_token_address = market['short_token_address']
+        index_token_address = market["index_token_address"]
+        long_token_address = market["long_token_address"]
+        short_token_address = market["short_token_address"]
 
         market_addresses = [self.market_key,
                             index_token_address,
@@ -335,16 +343,16 @@ class Withdraw:
                             short_token_address]
         prices = (
             (
-                int(oracle_prices_dict[index_token_address]['minPriceFull']),
-                int(oracle_prices_dict[index_token_address]['maxPriceFull'])
+                int(oracle_prices_dict[index_token_address]["minPriceFull"]),
+                int(oracle_prices_dict[index_token_address]["maxPriceFull"])
             ),
             (
-                int(oracle_prices_dict[long_token_address]['minPriceFull']),
-                int(oracle_prices_dict[long_token_address]['maxPriceFull'])
+                int(oracle_prices_dict[long_token_address]["minPriceFull"]),
+                int(oracle_prices_dict[long_token_address]["maxPriceFull"])
             ),
             (
-                int(oracle_prices_dict[short_token_address]['minPriceFull']),
-                int(oracle_prices_dict[short_token_address]['maxPriceFull'])
+                int(oracle_prices_dict[short_token_address]["minPriceFull"]),
+                int(oracle_prices_dict[short_token_address]["maxPriceFull"])
             ))
 
         parameters = {

@@ -14,6 +14,7 @@ from ..gmx_utils import (
 )
 from ..gas_utils import get_execution_fee
 from ..approve_token_for_spend import check_if_approved
+from typing import Optional
 
 is_newer_version, version = check_web3_correct_version()
 if is_newer_version:
@@ -27,7 +28,7 @@ class Order:
         self, config: str, market_key: str, collateral_address: str,
         index_token_address: str, is_long: bool, size_delta: float,
         initial_collateral_delta_amount: str, slippage_percent: float,
-        swap_path: list, max_fee_per_gas: int = None, auto_cancel: bool = False,
+        swap_path: list, max_fee_per_gas: Optional[int] = None, auto_cancel: bool = False,
         debug_mode: bool = False, execution_buffer: float = 1.3
     ) -> None:
 
@@ -46,14 +47,13 @@ class Order:
         self.execution_buffer = execution_buffer
 
         if self.debug_mode:
-            logging.info("Execution buffer set to: {:.2f}%".format(
-                (self.execution_buffer - 1) * 100))
+            logging.info(f"Execution buffer set to: {(self.execution_buffer - 1) * 100:.2f}%")
 
         if self.max_fee_per_gas is None:
             block = create_connection(
                 config
-            ).eth.get_block('latest')
-            self.max_fee_per_gas = block['baseFeePerGas'] * 1.35
+            ).eth.get_block("latest")
+            self.max_fee_per_gas = block["baseFeePerGas"] * 1.35
 
         self._exchange_router_contract_obj = get_exchange_router_contract(
             config=self.config
@@ -71,7 +71,7 @@ class Order:
         """
         Check for Approval
         """
-        spender = contract_map[self.config.chain]["syntheticsrouter"]['contract_address']
+        spender = contract_map[self.config.chain]["syntheticsrouter"]["contract_address"]
 
         check_if_approved(self.config,
                           spender,
@@ -86,53 +86,70 @@ class Order:
     ):
         """
         Submit Transaction
+
+        Parameters
+        ----------
+        user_wallet_address : str
+            Address of the user's wallet (used for nonce calculation)
+        value_amount : float
+            Amount of native token to send with the transaction
+        multicall_args : list
+            List of encoded function calls for multicall
+        gas_limits : dict
+            Gas limits for the transaction
+
+        Returns
+        -------
+        str or None
+            Transaction hash if transaction is sent, None in debug mode
         """
         self.log.info("Building transaction...")
+
         try:
             wallet_address = Web3.to_checksum_address(user_wallet_address)
         except AttributeError:
             wallet_address = Web3.toChecksumAddress(user_wallet_address)
-        nonce = self._connection.eth.get_transaction_count(
-            wallet_address
-        )
+
+        nonce = self._connection.eth.get_transaction_count(wallet_address)
+
+        # Get the signer from config
+        signer = self.config.get_signer()
+
+        # Ensure the signer address matches the wallet address
+        if signer.get_address().lower() != wallet_address.lower():
+            self.log.warning(
+                f"Signer address {signer.get_address()} doesn't match wallet address {wallet_address}"
+            )
 
         raw_txn = self._exchange_router_contract_obj.functions.multicall(
             multicall_args
         ).build_transaction(
             {
-                'value': value_amount,
-                'chainId': self.config.chain_id,
-
-                # TODO - this is NOT correct
-                'gas': (
-                    self._gas_limits_order_type.call(
-                    ) + self._gas_limits_order_type.call()
+                "from": signer.get_address(),
+                "value": value_amount,
+                "chainId": self.config.chain_id,
+                "gas": (
+                    self._gas_limits_order_type.call() + self._gas_limits_order_type.call()
                 ),
-                'maxFeePerGas': int(self.max_fee_per_gas),
-                'maxPriorityFeePerGas': 0,
-                'nonce': nonce
+                "maxFeePerGas": int(self.max_fee_per_gas),
+                "maxPriorityFeePerGas": 0,
+                "nonce": nonce
             }
         )
 
         if not self.debug_mode:
-            signed_txn = self._connection.eth.account.sign_transaction(
-                raw_txn, self.config.private_key
-            )
+            # Use signer to send the transaction
+            tx_hash = signer.send_transaction(raw_txn)
 
-            try:
-                txn = signed_txn.rawTransaction
-            except AttributeError:
-                txn = signed_txn.raw_transaction
-
-            tx_hash = self._connection.eth.send_raw_transaction(
-                txn
-            )
             self.log.info("Txn submitted!")
             self.log.info(
-                "Check status: https://arbiscan.io/tx/0x{}".format(tx_hash.hex())
+                f"Check status: https://arbiscan.io/tx/{tx_hash.hex()}"
             )
 
             self.log.info("Transaction submitted!")
+            return tx_hash
+
+        return None
 
     def _get_prices(
         self, decimals: float, prices: float, is_open: bool = False,
@@ -144,8 +161,8 @@ class Order:
         self.log.info("Getting prices...")
         price = np.median(
             [
-                float(prices[self.index_token_address]['maxPriceFull']),
-                float(prices[self.index_token_address]['minPriceFull'])
+                float(prices[self.index_token_address]["maxPriceFull"]),
+                float(prices[self.index_token_address]["minPriceFull"])
             ]
         )
 
@@ -177,12 +194,12 @@ class Order:
         )
 
         self.log.info(
-            "Mark Price: ${:.4f}".format(price * 10 ** (decimals - PRECISION))
+            f"Mark Price: ${price * 10 ** (decimals - PRECISION):.4f}"
         )
 
         if acceptable_price_in_usd != 0:
             self.log.info(
-                "Acceptable price: ${:.4f}".format(acceptable_price_in_usd)
+                f"Acceptable price: ${acceptable_price_in_usd:.4f}"
             )
 
         return price, int(slippage), acceptable_price_in_usd
@@ -221,11 +238,11 @@ class Order:
         min_output_amount = 0
 
         if is_open:
-            order_type = order_types['market_increase']
+            order_type = order_types["market_increase"]
         elif is_close:
-            order_type = order_types['market_decrease']
+            order_type = order_types["market_decrease"]
         elif is_swap:
-            order_type = order_types['market_swap']
+            order_type = order_types["market_swap"]
 
             # Estimate amount of token out using a reader function, necessary
             # for multi swap
@@ -237,7 +254,7 @@ class Order:
 
             # this var will help to calculate the cost gas depending on the
             # operation
-            self._get_limits_order_type = self._gas_limits['single_swap']
+            self._get_limits_order_type = self._gas_limits["single_swap"]
             if len(self.swap_path) > 1:
                 estimated_output = self.estimated_swap_output(
                     markets[self.swap_path[1]],
@@ -250,12 +267,12 @@ class Order:
                         ] * self.slippage_percent
                     )
                 )
-                self._get_limits_order_type = self._gas_limits['swap_order']
+                self._get_limits_order_type = self._gas_limits["swap_order"]
 
             min_output_amount = estimated_output["out_token_amount"] - \
                 estimated_output["out_token_amount"] * self.slippage_percent
 
-        decrease_position_swap_type = decrease_position_swap_types['no_swap']
+        decrease_position_swap_type = decrease_position_swap_types["no_swap"]
 
         should_unwrap_native_token = True
         referral_code = HexBytes(
@@ -271,20 +288,20 @@ class Order:
 
         # parameters using to calculate execution price
         execution_price_parameters = {
-            'data_store_address': (
-                contract_map[self.config.chain]["datastore"]['contract_address']
+            "data_store_address": (
+                contract_map[self.config.chain]["datastore"]["contract_address"]
             ),
-            'market_key': self.market_key,
-            'index_token_price': [
-                int(prices[self.index_token_address]['maxPriceFull']),
-                int(prices[self.index_token_address]['minPriceFull'])
+            "market_key": self.market_key,
+            "index_token_price": [
+                int(prices[self.index_token_address]["maxPriceFull"]),
+                int(prices[self.index_token_address]["minPriceFull"])
             ],
-            'position_size_in_usd': 0,
-            'position_size_in_tokens': 0,
-            'size_delta': size_delta_price_price_impact,
-            'is_long': self.is_long
+            "position_size_in_usd": 0,
+            "position_size_in_tokens": 0,
+            "size_delta": size_delta_price_price_impact,
+            "is_long": self.is_long
         }
-        decimals = markets[self.market_key]['market_metadata']['decimals']
+        decimals = markets[self.market_key]["market_metadata"]["decimals"]
 
         price, acceptable_price, acceptable_price_in_usd = self._get_prices(
             decimals,
@@ -312,7 +329,7 @@ class Order:
         )
         self.log.info(
             "Execution price: ${:.4f}".format(
-                execution_price_and_price_impact_dict['execution_price']
+                execution_price_and_price_impact_dict["execution_price"]
             )
         )
 
@@ -320,21 +337,25 @@ class Order:
         if is_open:
             if self.is_long:
                 if execution_price_and_price_impact_dict[
-                        'execution_price'] > acceptable_price_in_usd:
-                    raise Exception("Execution price falls outside acceptable price!")
+                        "execution_price"] > acceptable_price_in_usd:
+                    msg = "Execution price falls outside acceptable price!"
+                    raise Exception(msg)
             elif not self.is_long:
                 if execution_price_and_price_impact_dict[
-                        'execution_price'] < acceptable_price_in_usd:
-                    raise Exception("Execution price falls outside acceptable price!")
+                        "execution_price"] < acceptable_price_in_usd:
+                    msg = "Execution price falls outside acceptable price!"
+                    raise Exception(msg)
         elif is_close:
             if self.is_long:
                 if execution_price_and_price_impact_dict[
-                        'execution_price'] < acceptable_price_in_usd:
-                    raise Exception("Execution price falls outside acceptable price!")
+                        "execution_price"] < acceptable_price_in_usd:
+                    msg = "Execution price falls outside acceptable price!"
+                    raise Exception(msg)
             elif not self.is_long:
                 if execution_price_and_price_impact_dict[
-                        'execution_price'] > acceptable_price_in_usd:
-                    raise Exception("Execution price falls outside acceptable price!")
+                        "execution_price"] > acceptable_price_in_usd:
+                    msg = "Execution price falls outside acceptable price!"
+                    raise Exception(msg)
 
         user_wallet_address = convert_to_checksum_address(
             self.config,
@@ -390,7 +411,7 @@ class Order:
         # need to send tokens to vault
 
         value_amount = execution_fee
-        if self.collateral_address != '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1' and not is_close:
+        if self.collateral_address != "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1" and not is_close:
 
             multicall_args = [
                 HexBytes(self._send_wnt(value_amount)),
@@ -443,7 +464,7 @@ class Order:
                 fn_name="sendTokens",
                 args=(
                     self.collateral_address,
-                    '0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5',
+                    "0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5",
                     amount
                 ),
             )
@@ -452,7 +473,7 @@ class Order:
                 abi_element_identifier="sendTokens",
                 args=(
                     self.collateral_address,
-                    '0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5',
+                    "0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5",
                     amount
                 ),
             )
@@ -463,7 +484,7 @@ class Order:
         """
         try:
             return self._exchange_router_contract_obj.encodeABI(
-                fn_name='sendWnt',
+                fn_name="sendWnt",
                 args=(
                     "0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5",
                     amount
@@ -471,7 +492,7 @@ class Order:
             )
         except AttributeError:
             return self._exchange_router_contract_obj.encode_abi(
-                abi_element_identifier='sendWnt',
+                abi_element_identifier="sendWnt",
                 args=(
                     "0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5",
                     amount

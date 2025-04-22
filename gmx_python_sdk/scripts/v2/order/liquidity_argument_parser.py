@@ -74,7 +74,7 @@ class LiquidityArgumentParser:
 
         # If withdrawal, quick dirty way to convert gm amount
         if self.is_withdrawal:
-            parameters_dict['gm_amount'] = int(parameters_dict['gm_amount'] * 10**18)
+            parameters_dict["gm_amount"] = int(parameters_dict["gm_amount"] * 10**18)
 
         return self.parameters_dict
 
@@ -96,7 +96,8 @@ class LiquidityArgumentParser:
         Will trigger is chain is missing from parameters dictionary, chain must be supplied by user
         """
 
-        raise Exception("Please pass chain name in parameters dictionary!")
+        msg = "Please pass chain name in parameters dictionary!"
+        raise Exception(msg)
 
     def _handle_missing_index_token_address(self):
         """
@@ -105,13 +106,14 @@ class LiquidityArgumentParser:
         """
 
         try:
-            token_symbol = self.parameters_dict['market_token_symbol']
+            token_symbol = self.parameters_dict["market_token_symbol"]
         except KeyError:
-            raise Exception("Market Token Address and Symbol not provided!")
+            msg = "Market Token Address and Symbol not provided!"
+            raise Exception(msg)
 
-        self.parameters_dict['market_token_address'] = self.find_key_by_symbol(
+        self.parameters_dict["market_token_address"] = self.find_key_by_symbol(
             get_tokens_address_dict(
-                self.parameters_dict['chain']
+                self.parameters_dict["chain"]
             ),
             token_symbol
 
@@ -123,10 +125,10 @@ class LiquidityArgumentParser:
         """
 
         self._handle_missing_index_token_address()
-        index_token_address = self.parameters_dict['market_token_address']
+        index_token_address = self.parameters_dict["market_token_address"]
 
         # use the index token address to find the market key from get_available_markets
-        self.parameters_dict['market_key'] = self.find_market_key_by_index_address(
+        self.parameters_dict["market_key"] = self.find_market_key_by_index_address(
             Markets(self.config).get_available_markets(),
             index_token_address
         )
@@ -138,24 +140,23 @@ class LiquidityArgumentParser:
         """
 
         try:
-            long_token_symbol = self.parameters_dict['long_token_symbol']
+            long_token_symbol = self.parameters_dict["long_token_symbol"]
 
             if long_token_symbol == "BTC":
                 self.parameters_dict[
-                    'long_token_address'
+                    "long_token_address"
                 ] = "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f"
                 return
             if long_token_symbol is None:
                 raise KeyError
         except KeyError:
-            self.parameters_dict['long_token_address'] = None
-            print("Long Token Address and Symbol not provided!")
+            self.parameters_dict["long_token_address"] = None
             return
 
         # search the known tokens for a contract address using the user supplied symbol
-        self.parameters_dict['long_token_address'] = self.find_key_by_symbol(
+        self.parameters_dict["long_token_address"] = self.find_key_by_symbol(
             get_tokens_address_dict(
-                self.parameters_dict['chain']),
+                self.parameters_dict["chain"]),
             long_token_symbol
         )
 
@@ -166,18 +167,17 @@ class LiquidityArgumentParser:
         """
 
         try:
-            short_token_symbol = self.parameters_dict['short_token_symbol']
+            short_token_symbol = self.parameters_dict["short_token_symbol"]
             if short_token_symbol is None:
                 raise KeyError
         except KeyError:
-            self.parameters_dict['short_token_address'] = None
-            print("Short Token Address and Symbol not provided!")
+            self.parameters_dict["short_token_address"] = None
             return
 
         # search the known tokens for a contract address using the user supplied symbol
-        self.parameters_dict['short_token_address'] = self.find_key_by_symbol(
+        self.parameters_dict["short_token_address"] = self.find_key_by_symbol(
             get_tokens_address_dict(
-                self.parameters_dict['chain']),
+                self.parameters_dict["chain"]),
             short_token_symbol
         )
 
@@ -189,30 +189,32 @@ class LiquidityArgumentParser:
         """
 
         try:
-            out_token_symbol = self.parameters_dict['out_token_symbol']
+            out_token_symbol = self.parameters_dict["out_token_symbol"]
             if out_token_symbol is None:
                 raise KeyError
         except KeyError:
-            raise Exception("Must provided either out token symbol or address")
+            msg = "Must provided either out token symbol or address"
+            raise Exception(msg)
 
         # search the known tokens for a contract address using the user supplied symbol
         out_token_address = self.find_key_by_symbol(
             get_tokens_address_dict(
-                self.parameters_dict['chain']),
+                self.parameters_dict["chain"]),
             out_token_symbol
         )
 
         markets = Markets(self.config).get_available_markets()
-        market = markets[self.parameters_dict['market_key']]
+        market = markets[self.parameters_dict["market_key"]]
 
         if out_token_symbol == "BTC":
             out_token_address = "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f"
 
-        if out_token_address not in [market['long_token_address'], market['short_token_address']]:
+        if out_token_address not in [market["long_token_address"], market["short_token_address"]]:
+            msg = "Out token must be either the long or short token of the market"
             raise Exception(
-                "Out token must be either the long or short token of the market")
+                msg)
         else:
-            self.parameters_dict['out_token_address'] = out_token_address
+            self.parameters_dict["out_token_address"] = out_token_address
 
     def _handle_missing_long_token_amount(self):
         """
@@ -225,12 +227,12 @@ class LiquidityArgumentParser:
             return
         prices = OraclePrices(chain=self.config.chain).get_recent_prices()
         price = np.median(
-            [float(prices[self.parameters_dict["long_token_address"]]['maxPriceFull']),
-             float(prices[self.parameters_dict["long_token_address"]]['minPriceFull'])]
+            [float(prices[self.parameters_dict["long_token_address"]]["maxPriceFull"]),
+             float(prices[self.parameters_dict["long_token_address"]]["minPriceFull"])]
         )
         decimal = get_tokens_address_dict(
-            self.parameters_dict['chain']
-        )[self.parameters_dict["long_token_address"]]['decimals']
+            self.parameters_dict["chain"]
+        )[self.parameters_dict["long_token_address"]]["decimals"]
         oracle_factor = decimal - 30
 
         price = price * 10 ** oracle_factor
@@ -248,14 +250,14 @@ class LiquidityArgumentParser:
             self.parameters_dict["short_token_amount"] = 0
             return
 
-        prices = OraclePrices(chain=self.parameters_dict['chain']).get_recent_prices()
+        prices = OraclePrices(chain=self.parameters_dict["chain"]).get_recent_prices()
         price = np.median(
-            [float(prices[self.parameters_dict["short_token_address"]]['maxPriceFull']),
-             float(prices[self.parameters_dict["short_token_address"]]['minPriceFull'])]
+            [float(prices[self.parameters_dict["short_token_address"]]["maxPriceFull"]),
+             float(prices[self.parameters_dict["short_token_address"]]["minPriceFull"])]
         )
         decimal = get_tokens_address_dict(
-            self.parameters_dict['chain']
-        )[self.parameters_dict["short_token_address"]]['decimals']
+            self.parameters_dict["chain"]
+        )[self.parameters_dict["short_token_address"]]["decimals"]
         oracle_factor = decimal - 30
 
         price = price * 10 ** oracle_factor
@@ -279,9 +281,10 @@ class LiquidityArgumentParser:
         """
 
         for key, value in input_dict.items():
-            if value.get('symbol') == search_symbol:
+            if value.get("symbol") == search_symbol:
                 return key
-        raise Exception('"{}" not a known token for GMX v2!'.format(search_symbol))
+        msg = f'"{search_symbol}" not a known token for GMX v2!'
+        raise Exception(msg)
 
     @staticmethod
     def find_market_key_by_index_address(input_dict: dict, index_token_address: str):
@@ -299,6 +302,6 @@ class LiquidityArgumentParser:
         """
 
         for key, value in input_dict.items():
-            if value.get('index_token_address') == index_token_address:
+            if value.get("index_token_address") == index_token_address:
                 return key
         return None

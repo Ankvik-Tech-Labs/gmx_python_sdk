@@ -51,10 +51,10 @@ class GetClaimableFees(GetData):
             long_token_price = np.median(
                 [
                     float(
-                        prices[self._long_token_address]['maxPriceFull']
+                        prices[self._long_token_address]["maxPriceFull"]
                     ) / oracle_precision,
                     float(
-                        prices[self._long_token_address]['minPriceFull']
+                        prices[self._long_token_address]["minPriceFull"]
                     ) / oracle_precision
                 ]
             )
@@ -69,8 +69,8 @@ class GetClaimableFees(GetData):
             )
 
             # add the uncalled web3 objects to list
-            long_output_list = long_output_list + [long_output]
-            short_output_list = short_output_list + [short_output]
+            long_output_list = [*long_output_list, long_output]
+            short_output_list = [*short_output_list, short_output]
 
             # add the market symbol to a list to use to map to dictionary later
             mapper.append(market_symbol)
@@ -118,7 +118,7 @@ class GetClaimableFees(GetData):
 
             total_fees += long_claimable_usd + short_claimable_usd
 
-        return {'total_fees': total_fees,
+        return {"total_fees": total_fees,
                 "parameter": "total_fees"}
 
     def _get_claimable_fee_amount(

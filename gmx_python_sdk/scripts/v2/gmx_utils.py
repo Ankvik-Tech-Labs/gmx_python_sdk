@@ -11,19 +11,20 @@ import pandas as pd
 from datetime import datetime
 
 from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
 
 
 # Get the absolute path of the current script
 current_script_path = os.path.abspath(__file__)
 base_dir = os.path.abspath(
-    os.path.join(current_script_path, '..', '..', '..', '..')
+    os.path.join(current_script_path, "..", "..", "..", "..")
 )
-package_dir = base_dir + '/gmx_python_sdk/'
+package_dir = base_dir + "/gmx_python_sdk/"
 
 logging.basicConfig(
-    format='{asctime} {levelname}: {message}',
-    datefmt='%m/%d/%Y %I:%M:%S %p',
-    style='{',
+    format="{asctime} {levelname}: {message}",
+    datefmt="%m/%d/%Y %I:%M:%S %p",
+    style="{",
     level=logging.INFO
 )
 
@@ -40,7 +41,7 @@ def execute_threading(function_calls):
 
 
 contract_map = {
-    'arbitrum':
+    "arbitrum":
     {
         "datastore":
         {
@@ -88,7 +89,7 @@ contract_map = {
             "abi_path": "contracts/arbitrum/glvreader.json"
         }
     },
-    'avalanche':
+    "avalanche":
     {
         "datastore":
         {
@@ -140,17 +141,17 @@ contract_map = {
 
 
 class ConfigManager:
-
     def __init__(
-        self, 
-        chain: str, 
-        *, 
-        rpc=None, 
-        chain_id=None, 
-        user_wallet_address=None, 
-        private_key=None, 
+        self,
+        chain: str,
+        *,
+        rpc=None,
+        chain_id=None,
+        user_wallet_address=None,
+        private_key=None,
         tg_bot_token=None,
-        config: dict = None
+        config: Optional[dict] = None,
+        signer=None
     ):
         self.chain = chain
         self.rpc = rpc
@@ -158,38 +159,45 @@ class ConfigManager:
         self.user_wallet_address = user_wallet_address
         self.private_key = private_key
         self.tg_bot_token = tg_bot_token
+        self._signer = signer
+        self._web3_connection = None
 
         # If a configuration dictionary is provided, use it to override defaults.
         if config:
             self.set_config_from_dict(config)
-    
+
     def set_config_from_dict(self, config: dict):
         """
         Set configuration using a dictionary provided by the user.
         """
         # Update values only if they exist in the provided configuration
         # Fallback to current values if not provided.
-        if 'rpcs' in config and self.chain in config['rpcs']:
-            self.rpc = config['rpcs'][self.chain]
-        if 'chain_ids' in config and self.chain in config['chain_ids']:
-            self.chain_id = config['chain_ids'][self.chain]
-        
-        self.user_wallet_address = config.get('user_wallet_address', self.user_wallet_address)
-        self.private_key = config.get('private_key', self.private_key)
-        self.tg_bot_token = config.get('tg_bot_token', self.tg_bot_token) 
+        if "rpcs" in config and self.chain in config["rpcs"]:
+            self.rpc = config["rpcs"][self.chain]
+        if "chain_ids" in config and self.chain in config["chain_ids"]:
+            self.chain_id = config["chain_ids"][self.chain]
+
+        self.user_wallet_address = config.get("user_wallet_address", self.user_wallet_address)
+        self.private_key = config.get("private_key", self.private_key)
+        self.tg_bot_token = config.get("tg_bot_token", self.tg_bot_token)
 
     def set_config(self, filepath: str = os.path.join(base_dir, "config.yaml")):
-
-        with open(filepath, 'r') as file:
+        """
+        Set configuration from a YAML file.
+        """
+        with open(filepath) as file:
             config_file = yaml.safe_load(file)
 
-        self.set_rpc(config_file['rpcs'][self.chain])
-        self.set_chain_id(config_file['chain_ids'][self.chain])
-        self.set_wallet_address(config_file['user_wallet_address'])
-        self.set_private_key(config_file['private_key'])
+        self.set_rpc(config_file["rpcs"][self.chain])
+        self.set_chain_id(config_file["chain_ids"][self.chain])
+        self.set_wallet_address(config_file["user_wallet_address"])
+        self.set_private_key(config_file["private_key"])
 
     def set_rpc(self, value):
         self.rpc = value
+        # Reset web3 connection and signer when RPC changes
+        self._web3_connection = None
+        self._signer = None
 
     def set_chain_id(self, value):
         self.chain_id = value
@@ -199,16 +207,70 @@ class ConfigManager:
 
     def set_private_key(self, value):
         self.private_key = value
+        # Reset signer when private key changes
+        self._signer = None
+
+    def get_web3_connection(self):
+        """
+        Get or create a Web3 connection.
+
+        Returns
+        -------
+        web3.Web3
+            Web3 connection instance
+        """
+        if self._web3_connection is None:
+            if self.rpc is None:
+                msg = "RPC URL is required to create a Web3 connection"
+                raise ValueError(msg)
+            self._web3_connection = Web3(Web3.HTTPProvider(self.rpc))
+
+        return self._web3_connection
+
+    def get_signer(self):
+        """
+        Get or create a transaction signer.
+
+        Returns
+        -------
+        Signer
+            Signer implementation for transaction signing
+        """
+        from .signers import create_signer
+
+        if self._signer is None:
+            web3_conn = self.get_web3_connection()
+            self._signer = create_signer(web3_conn, self.private_key)
+
+            # If user_wallet_address is set but doesn't match signer address, warn
+            if (self.user_wallet_address and
+                self.user_wallet_address.lower() != self._signer.get_address().lower()):
+                import logging
+                logging.warning(
+                    f"Configured wallet address {self.user_wallet_address} doesn't match "
+                    f"signer address {self._signer.get_address()}"
+                )
+                # Update user_wallet_address to match signer
+                self.user_wallet_address = self._signer.get_address()
+
+        return self._signer
 
 
 def create_connection(config):
     """
     Create a connection to the blockchain
+
+    Parameters
+    ----------
+    config : ConfigManager
+        Configuration manager instance with connection details
+
+    Returns
+    -------
+    web3.Web3
+        Web3 connection object
     """
-
-    web3_obj = Web3(Web3.HTTPProvider(config.rpc))
-
-    return web3_obj
+    return config.get_web3_connection()
 
 
 def convert_to_checksum_address(config, address: str):
@@ -263,7 +325,7 @@ def get_contract_object(web3_obj, contract_name: str, chain: str):
         open(
             os.path.join(
                 base_dir,
-                'gmx_python_sdk',
+                "gmx_python_sdk",
                 contract_map[chain][contract_name]["abi_path"]
             )
         )
@@ -292,8 +354,8 @@ def get_token_balance_contract(config: str, contract_address: str):
         open(
             os.path.join(
                 package_dir,
-                'contracts',
-                'balance_abi.json'
+                "contracts",
+                "balance_abi.json"
             )
         )
     )
@@ -330,16 +392,16 @@ def get_tokens_address_dict(chain: str):
         if response.status_code == 200:
 
             # Parse the JSON response
-            token_infos = response.json()['tokens']
+            token_infos = response.json()["tokens"]
         else:
-            print(f"Error: {response.status_code}")
-    except requests.RequestException as e:
-        print(f"Error: {e}")
+            pass
+    except requests.RequestException:
+        pass
 
     token_address_dict = {}
 
     for token_info in token_infos:
-        token_address_dict[token_info['address']] = token_info
+        token_address_dict[token_info["address"]] = token_info
 
     return token_address_dict
 
@@ -358,7 +420,7 @@ def get_reader_contract(config):
     web3_obj = create_connection(config)
     return get_contract_object(
         web3_obj,
-        'syntheticsreader',
+        "syntheticsreader",
         config.chain
     )
 
@@ -377,7 +439,7 @@ def get_event_emitter_contract(config):
     web3_obj = create_connection(config)
     return get_contract_object(
         web3_obj,
-        'eventemitter',
+        "eventemitter",
         config.chain
     )
 
@@ -396,7 +458,7 @@ def get_datastore_contract(config):
     web3_obj = create_connection(config)
     return get_contract_object(
         web3_obj,
-        'datastore',
+        "datastore",
         config.chain
     )
 
@@ -415,7 +477,7 @@ def get_exchange_router_contract(config):
     web3_obj = create_connection(config)
     return get_contract_object(
         web3_obj,
-        'exchangerouter',
+        "exchangerouter",
         config.chain
     )
 
@@ -434,27 +496,27 @@ def get_glv_reader_contract(config):
     web3_obj = create_connection(config)
     return get_contract_object(
         web3_obj,
-        'glvreader',
+        "glvreader",
         config.chain
     )
 
 
 def create_signer(config: str):
     """
-    Creastea a signer for a given chain
+    Create a signer for a given chain
 
     Parameters
     ----------
-    chain : str
-        avalanche or arbitrum.
+    config : ConfigManager
+        Configuration manager with connection details and credentials
 
+    Returns
+    -------
+    Signer
+        Signer instance for transaction signing
     """
-
-    private_key = config.private_key
-    rpc = config.rpc
-    web3_obj = create_connection(rpc)
-
-    return web3_obj.eth.account.from_key(private_key)
+    # Instead of creating a signer directly, delegate to the ConfigManager's get_signer method
+    return config.get_signer()
 
 
 def create_hash(data_type_list: list, data_value_list: list):
@@ -516,17 +578,17 @@ def get_execution_price_and_price_impact(
     reader_contract_obj = get_reader_contract(config)
 
     output = reader_contract_obj.functions.getExecutionPrice(
-        params['data_store_address'],
-        params['market_key'],
-        params['index_token_price'],
-        params['position_size_in_usd'],
-        params['position_size_in_tokens'],
-        params['size_delta'],
-        params['is_long'],
+        params["data_store_address"],
+        params["market_key"],
+        params["index_token_price"],
+        params["position_size_in_usd"],
+        params["position_size_in_tokens"],
+        params["size_delta"],
+        params["is_long"],
     ).call()
 
-    return {'execution_price': output[2] / 10**(PRECISION - decimals),
-            'price_impact_usd': output[0] / 10**PRECISION}
+    return {"execution_price": output[2] / 10**(PRECISION - decimals),
+            "price_impact_usd": output[0] / 10**PRECISION}
 
 
 def get_estimated_swap_output(config, params: dict):
@@ -545,16 +607,16 @@ def get_estimated_swap_output(config, params: dict):
     reader_contract_obj = get_reader_contract(config)
 
     output = reader_contract_obj.functions.getSwapAmountOut(
-        params['data_store_address'],
-        params['market_addresses'],
-        params['token_prices_tuple'],
-        params['token_in'],
-        params['token_amount_in'],
-        params['ui_fee_receiver'],
+        params["data_store_address"],
+        params["market_addresses"],
+        params["token_prices_tuple"],
+        params["token_in"],
+        params["token_amount_in"],
+        params["ui_fee_receiver"],
     ).call()
 
-    return {'out_token_amount': output[0],
-            'price_impact_usd': output[1]
+    return {"out_token_amount": output[0],
+            "price_impact_usd": output[1]
             }
 
 
@@ -574,14 +636,14 @@ def get_estimated_deposit_amount_out(config, params: dict):
     reader_contract_obj = get_reader_contract(config)
 
     output = reader_contract_obj.functions.getDepositAmountOut(
-        params['data_store_address'],
-        params['market_addresses'],
-        params['token_prices_tuple'],
-        params['long_token_amount'],
-        params['short_token_amount'],
-        params['ui_fee_receiver'],
-        params['swap_pricing_type'],
-        params['include_virtual_inventory_impact']
+        params["data_store_address"],
+        params["market_addresses"],
+        params["token_prices_tuple"],
+        params["long_token_amount"],
+        params["short_token_amount"],
+        params["ui_fee_receiver"],
+        params["swap_pricing_type"],
+        params["include_virtual_inventory_impact"]
     ).call()
 
     return output
@@ -603,11 +665,11 @@ def get_estimated_withdrawal_amount_out(config, params: dict):
     reader_contract_obj = get_reader_contract(config)
 
     output = reader_contract_obj.functions.getWithdrawalAmountOut(
-        params['data_store_address'],
-        params['market_addresses'],
-        params['token_prices_tuple'],
-        params['gm_amount'],
-        params['ui_fee_receiver'],
+        params["data_store_address"],
+        params["market_addresses"],
+        params["token_prices_tuple"],
+        params["gm_amount"],
+        params["ui_fee_receiver"],
     ).call()
 
     return output
@@ -681,10 +743,10 @@ def get_funding_factor_per_period(
     """
 
     funding_factor_per_second = (
-        market_info['funding_factor_per_second'] * 10**-28
+        market_info["funding_factor_per_second"] * 10**-28
     )
 
-    long_pays_shorts = market_info['is_long_pays_short']
+    long_pays_shorts = market_info["is_long_pays_short"]
 
     if is_long:
         is_larger_side = long_pays_shorts
@@ -727,11 +789,11 @@ def save_json_file_to_datastore(filename: str, data: dict):
     """
     filepath = os.path.join(
         package_dir,
-        'data_store',
+        "data_store",
         filename
     )
 
-    with open(filepath, 'w') as f:
+    with open(filepath, "w") as f:
         json.dump(data, f)
 
 
@@ -746,7 +808,7 @@ def make_timestamped_dataframe(data):
 
     """
     dataframe = pd.DataFrame(data, index=[0])
-    dataframe['timestamp'] = datetime.now()
+    dataframe["timestamp"] = datetime.now()
 
     return dataframe
 
@@ -823,13 +885,13 @@ def determine_swap_route(markets: dict, in_token: str, out_token: str):
             markets,
             "index_token_address",
             out_token
-        )['gmx_market_address']
+        )["gmx_market_address"]
     else:
         gmx_market_address = find_dictionary_by_key_value(
             markets,
             "index_token_address",
             in_token
-        )['gmx_market_address']
+        )["gmx_market_address"]
 
     is_requires_multi_swap = False
 
@@ -840,7 +902,7 @@ def determine_swap_route(markets: dict, in_token: str, out_token: str):
             markets,
             "index_token_address",
             out_token
-        )['gmx_market_address']
+        )["gmx_market_address"]
 
         return [gmx_market_address, second_gmx_market_address], is_requires_multi_swap
 
@@ -869,5 +931,5 @@ def check_web3_correct_version():
 
 
 if __name__ == "__main__":
-    arbitrum_config_object = ConfigManager(chain='arbitrum')
+    arbitrum_config_object = ConfigManager(chain="arbitrum")
     arbitrum_config_object.set_config()

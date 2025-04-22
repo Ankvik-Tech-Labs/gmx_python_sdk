@@ -24,8 +24,8 @@ def get_execution_fee(gas_limits: dict, estimated_gas_limit, gas_price: int):
 
     """
 
-    base_gas_limit = gas_limits['estimated_fee_base_gas_limit'].call()
-    multiplier_factor = gas_limits['estimated_fee_multiplier_factor'].call()
+    base_gas_limit = gas_limits["estimated_fee_base_gas_limit"].call()
+    multiplier_factor = gas_limits["estimated_fee_multiplier_factor"].call()
     adjusted_gas_limit = base_gas_limit + apply_factor(estimated_gas_limit.call(),
                                                        multiplier_factor)
 
@@ -60,9 +60,9 @@ def get_gas_limits(datastore_object):
 
 if __name__ == "__main__":
 
-    chain = 'arbitrum'
+    chain = "arbitrum"
     connection = create_connection(chain=chain)
     datastore_object = get_datastore_contract(chain)
     gas_limits = get_gas_limits(datastore_object)
     gas_price = connection.eth.gas_price
-    execution_fee = int(get_execution_fee(gas_limits, gas_limits['increase_order'], gas_price))
+    execution_fee = int(get_execution_fee(gas_limits, gas_limits["increase_order"], gas_price))

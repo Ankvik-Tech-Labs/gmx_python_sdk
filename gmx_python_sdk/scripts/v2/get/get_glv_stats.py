@@ -1,8 +1,7 @@
 from .get import GetData
 from ..gmx_utils import (
     get_glv_reader_contract,
-    save_json_file_to_datastore, make_timestamped_dataframe,
-    save_csv_to_datastore, get_token_balance_contract
+    get_token_balance_contract
 )
 from .get_oracle_prices import OraclePrices
 from .get_gm_prices import GMPrices
@@ -108,11 +107,11 @@ class GlvStats(GetData):
 
                 market_symbol = self.markets.get_market_symbol(market_address)
                 glv_markets_metadata[market_address] = {"address": market_address,
-                                                        'market symbol': market_symbol,
+                                                        "market symbol": market_symbol,
                                                         "balance": market_token_balance,
                                                         "gm price": gm_price}
 
-            glv_info_dict[glv_market_address]['markets_metadata'] = glv_markets_metadata
+            glv_info_dict[glv_market_address]["markets_metadata"] = glv_markets_metadata
 
             glv_price = self._get_glv_token_price(
                 glv_market_address,
@@ -122,7 +121,7 @@ class GlvStats(GetData):
                 short_token_price
             )
 
-            glv_info_dict[glv_market_address]['glv_price'] = glv_price
+            glv_info_dict[glv_market_address]["glv_price"] = glv_price
 
         return glv_info_dict
 

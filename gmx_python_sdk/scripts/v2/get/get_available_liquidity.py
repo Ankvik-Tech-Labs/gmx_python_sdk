@@ -2,7 +2,7 @@ import time
 
 import numpy as np
 from numerize import numerize
-from typing import Tuple, Any
+from typing import Any
 
 from .get import GetData
 from .get_oracle_prices import OraclePrices
@@ -78,7 +78,7 @@ class GetAvailableLiquidity(GetData):
                 self._long_token_address,
                 True
             )
-            reserved_long_list.append(open_interest['long'][market_symbol])
+            reserved_long_list.append(open_interest["long"][market_symbol])
             long_pool_amount_list.append(long_pool_amount)
             long_reserve_factor_list.append(long_reserve_factor)
             long_open_interest_reserve_factor_list.append(
@@ -96,7 +96,7 @@ class GetAvailableLiquidity(GetData):
                 self._short_token_address,
                 False
             )
-            reserved_short_list.append(open_interest['short'][market_symbol])
+            reserved_short_list.append(open_interest["short"][market_symbol])
             short_pool_amount_list.append(short_pool_amount)
             short_reserve_factor_list.append(short_reserve_factor)
             short_open_interest_reserve_factor_list.append(
@@ -109,10 +109,10 @@ class GetAvailableLiquidity(GetData):
             token_price = np.median(
                 [
                     float(
-                        prices[self._long_token_address]['maxPriceFull']
+                        prices[self._long_token_address]["maxPriceFull"]
                     ) / oracle_precision,
                     float(
-                        prices[self._long_token_address]['minPriceFull']
+                        prices[self._long_token_address]["minPriceFull"]
                     ) / oracle_precision
                 ]
             )
@@ -172,7 +172,7 @@ class GetAvailableLiquidity(GetData):
             long_precision_list,
             short_precision_list
         ):
-            self.log.info("Token: {}".format(token_symbol))
+            self.log.info(f"Token: {token_symbol}")
 
             # select the lesser of maximum value of pool reserves or open
             # interest limit
@@ -193,9 +193,7 @@ class GetAvailableLiquidity(GetData):
             long_liquidity = long_max_reserved_usd - float(reserved_long)
 
             self.log.info(
-                "Available Long Liquidity: ${}".format(
-                    numerize.numerize(long_liquidity)
-                )
+                f"Available Long Liquidity: ${numerize.numerize(long_liquidity)}"
             )
 
             # select the lesser of maximum value of pool reserves or open
@@ -227,20 +225,18 @@ class GetAvailableLiquidity(GetData):
                 short_liquidity = short_max_reserved_usd - float(reserved_short)
 
             self.log.info(
-                "Available Short Liquidity: ${}".format(
-                    numerize.numerize(short_liquidity)
-                )
+                f"Available Short Liquidity: ${numerize.numerize(short_liquidity)}"
             )
 
-            self.output['long'][token_symbol] = long_liquidity
-            self.output['short'][token_symbol] = short_liquidity
+            self.output["long"][token_symbol] = long_liquidity
+            self.output["short"][token_symbol] = short_liquidity
 
-        self.output['parameter'] = 'available_liquidity'
+        self.output["parameter"] = "available_liquidity"
 
         return self.output
 
     def get_max_reserved_usd(self, market: str, token: str, is_long: bool) -> (
-        Tuple[Any, Any, Any]
+        tuple[Any, Any, Any]
     ):
         """
         For a given market, long/short token and pool direction get the

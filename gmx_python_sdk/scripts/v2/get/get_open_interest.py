@@ -23,7 +23,6 @@ class OpenInterest(GetData):
         oracle_prices_dict = OraclePrices(
             self.config.chain
         ).get_recent_prices()
-        print("GMX v2 Open Interest\n")
 
         long_oi_output_list = []
         short_oi_output_list = []
@@ -48,16 +47,15 @@ class OpenInterest(GetData):
             ]
 
             min_price = int(
-                oracle_prices_dict[index_token_address]['minPriceFull']
+                oracle_prices_dict[index_token_address]["minPriceFull"]
             )
             max_price = int(
-                oracle_prices_dict[index_token_address]['maxPriceFull']
+                oracle_prices_dict[index_token_address]["maxPriceFull"]
             )
             prices_list = [min_price, max_price]
 
             # If the market is a synthetic one we need to use the decimals
             # from the index token
-            print(market_key)
             try:
                 if self.markets.is_synthetic(market_key):
                     decimal_factor = self.markets.get_decimal_factor(
@@ -76,7 +74,7 @@ class OpenInterest(GetData):
 
             oracle_factor = (30 - decimal_factor)
             precision = 10 ** (decimal_factor + oracle_factor)
-            long_precision_list = long_precision_list + [precision]
+            long_precision_list = [*long_precision_list, precision]
 
             long_oi_with_pnl, long_pnl = self._get_pnl(
                 market,
@@ -132,13 +130,12 @@ class OpenInterest(GetData):
                 f"{market_symbol} Short: ${numerize.numerize(short_value)}"
             )
 
-            self.output['long'][market_symbol] = long_value
-            self.output['short'][market_symbol] = short_value
-        self.output['parameter'] = "open_interest"
+            self.output["long"][market_symbol] = long_value
+            self.output["short"][market_symbol] = short_value
+        self.output["parameter"] = "open_interest"
 
         return self.output
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     data = OpenInterest(chain="arbitrum").get_data(to_csv=False)
-    print(data)

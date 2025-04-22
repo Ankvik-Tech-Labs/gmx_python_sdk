@@ -21,7 +21,7 @@ class GetData:
         self.markets = Markets(config)
         self.reader_contract = get_reader_contract(config)
         self.data_store_contract_address = (
-            contract_map[self.config.chain]['datastore']['contract_address']
+            contract_map[self.config.chain]["datastore"]["contract_address"]
         )
         self.output = {
             "long": {},
@@ -38,30 +38,30 @@ class GetData:
         data = self._get_data_processing()
 
         if to_json:
-            parameter = data['parameter']
+            parameter = data["parameter"]
             save_json_file_to_datastore(
-                "{}_{}_data.json".format(self.config.chain, parameter),
+                f"{self.config.chain}_{parameter}_data.json",
                 data
             )
 
         if to_csv:
             try:
-                parameter = data['parameter']
-                dataframe = make_timestamped_dataframe(data['long'])
+                parameter = data["parameter"]
+                dataframe = make_timestamped_dataframe(data["long"])
                 save_csv_to_datastore(
-                    "{}_long_{}_data.csv".format(self.config.chain, parameter),
+                    f"{self.config.chain}_long_{parameter}_data.csv",
                     dataframe
                 )
-                dataframe = make_timestamped_dataframe(data['short'])
+                dataframe = make_timestamped_dataframe(data["short"])
                 save_csv_to_datastore(
-                    "{}_short_{}_data.csv".format(self.config.chain, parameter),
+                    f"{self.config.chain}_short_{parameter}_data.csv",
                     dataframe
                 )
-            except KeyError as e:
+            except KeyError:
 
                 dataframe = make_timestamped_dataframe(data)
                 save_csv_to_datastore(
-                    "{}_{}_data.csv".format(self.config.chain, parameter),
+                    f"{self.config.chain}_{parameter}_data.csv",
                     dataframe
                 )
 
@@ -81,9 +81,7 @@ class GetData:
             market_key
         )
         self.log.info(
-            "Long Token Address: {}\nShort Token Address: {}".format(
-                self._long_token_address, self._short_token_address
-            )
+            f"Long Token Address: {self._long_token_address}\nShort Token Address: {self._short_token_address}"
         )
 
     def _filter_swap_markets(self):
@@ -91,7 +89,7 @@ class GetData:
         keys_to_remove = []
         for market_key in self.markets.info:
             market_symbol = self.markets.get_market_symbol(market_key)
-            if 'SWAP' in market_symbol:
+            if "SWAP" in market_symbol:
                 # Remove swap markets from dict
                 keys_to_remove.append(market_key)
 
@@ -155,42 +153,42 @@ class GetData:
                     int(
                         (
                             oracle_prices_dict[index_token_address]
-                            ['minPriceFull']
+                            ["minPriceFull"]
                         )
                     ),
                     int(
-                        (
+
                             oracle_prices_dict[index_token_address]
-                            ['maxPriceFull']
-                        )
+                            ["maxPriceFull"]
+
                     )
                 ),
                 (
                     int(
-                        (
+
                             oracle_prices_dict[self._long_token_address]
-                            ['minPriceFull']
-                        )
+                            ["minPriceFull"]
+
                     ),
                     int(
-                        (
+
                             oracle_prices_dict[self._long_token_address]
-                            ['maxPriceFull']
-                        )
+                            ["maxPriceFull"]
+
                     )
                 ),
                 (
                     int(
-                        (
+
                             oracle_prices_dict[self._short_token_address]
-                            ['minPriceFull']
-                        )
+                            ["minPriceFull"]
+
                     ),
                     int(
-                        (
+
                             oracle_prices_dict[self._short_token_address]
-                            ['maxPriceFull']
-                        )
+                            ["maxPriceFull"]
+
                     )
                 ))
 
@@ -200,29 +198,29 @@ class GetData:
             prices = (
                 (
                     int(
-                        oracle_prices_dict[index_token_address]['minPriceFull']
+                        oracle_prices_dict[index_token_address]["minPriceFull"]
                     ),
                     int(
-                        oracle_prices_dict[index_token_address]['maxPriceFull']
+                        oracle_prices_dict[index_token_address]["maxPriceFull"]
                     )
                 ),
                 (
                     int(
-                        (
+
                             oracle_prices_dict[self._long_token_address]
-                            ['minPriceFull']
-                        )
+                            ["minPriceFull"]
+
                     ),
                     int(
-                        (
+
                             oracle_prices_dict[self._long_token_address]
-                            ['maxPriceFull']
-                        )
+                            ["maxPriceFull"]
+
                     )
                 ),
                 (
-                    int(1000000000000000000000000),
-                    int(1000000000000000000000000)
+                    1000000000000000000000000,
+                    1000000000000000000000000
                 ))
 
         if return_tuple:
