@@ -1,6 +1,6 @@
-from .order import Order
 from ..gas_utils import get_gas_limits
 from ..gmx_utils import get_datastore_contract
+from .order import Order
 
 
 class DecreaseOrder(Order):
@@ -10,9 +10,7 @@ class DecreaseOrder(Order):
     """
 
     def __init__(self, *args: list, **kwargs: dict) -> None:
-        super().__init__(
-            *args, **kwargs
-        )
+        super().__init__(*args, **kwargs)
 
         # Close an order
         self.order_builder(is_close=True)

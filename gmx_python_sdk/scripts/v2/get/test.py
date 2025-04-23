@@ -1,10 +1,8 @@
 import logging
+
 import numpy as np
 
-from ..gmx_utils import (
-    get_reader_contract, contract_map, get_tokens_address_dict,
-    convert_to_checksum_address
-)
+from ..gmx_utils import contract_map, convert_to_checksum_address, get_reader_contract, get_tokens_address_dict
 from .get_markets import Markets
 from .get_oracle_prices import OraclePrices
 
@@ -36,11 +34,9 @@ class GetOpenPositions:
         """
         address = convert_to_checksum_address(self.chain, address)
 
-        raw_positions = self. _query_for_positions(address)
+        raw_positions = self._query_for_positions(address)
         if len(raw_positions) == 0:
-            logging.info(
-                f'No positions open for address: "{address}"" on {self.chain.title()}.'
-            )
+            logging.info(f'No positions open for address: "{address}"" on {self.chain.title()}.')
         processed_positions = {}
 
         for raw_position in raw_positions:
@@ -52,10 +48,7 @@ class GetOpenPositions:
             else:
                 direction = "short"
 
-            key = "{}_{}".format(
-                processed_position["market_symbol"],
-                direction
-            )
+            key = "{}_{}".format(processed_position["market_symbol"], direction)
             processed_positions[key] = processed_position
 
         return processed_positions
@@ -79,54 +72,34 @@ class GetOpenPositions:
 
         chain_tokens = get_tokens_address_dict(chain)
 
-        entry_price = (
-            raw_position[1][0] / raw_position[1][1]
-        ) / 10 ** (
+        entry_price = (raw_position[1][0] / raw_position[1][1]) / 10 ** (
             30 - chain_tokens[market_info["index_token_address"]]["decimals"]
         )
 
-        leverage = (
-            raw_position[1][0] / 10 ** 30
-        ) / (
-            raw_position[1][2] / 10 ** chain_tokens[
-                raw_position[0][2]
-            ]["decimals"]
+        leverage = (raw_position[1][0] / 10**30) / (
+            raw_position[1][2] / 10 ** chain_tokens[raw_position[0][2]]["decimals"]
         )
         prices = OraclePrices(chain=chain).get_recent_prices()
         mark_price = np.median(
             [
-                float(
-                    prices[market_info["index_token_address"]]["maxPriceFull"]
-                ),
-                float(
-                    prices[market_info["index_token_address"]]["minPriceFull"]
-                )
+                float(prices[market_info["index_token_address"]]["maxPriceFull"]),
+                float(prices[market_info["index_token_address"]]["minPriceFull"]),
             ]
-        ) / 10 ** (
-            30 - chain_tokens[market_info["index_token_address"]]["decimals"]
-        )
+        ) / 10 ** (30 - chain_tokens[market_info["index_token_address"]]["decimals"])
 
         return {
             "account": raw_position[0][0],
             "market": raw_position[0][1],
             "market_symbol": self.markets[raw_position[0][1]]["market_symbol"],
             "collateral_token": chain_tokens[raw_position[0][2]]["symbol"],
-            "position_size": raw_position[1][0]/10**30,
+            "position_size": raw_position[1][0] / 10**30,
             "size_in_tokens": raw_position[1][1],
             "entry_price": (
-                (
-                    raw_position[1][0] / raw_position[1][1]
-                ) / 10 ** (
-                    30 - chain_tokens[
-                        market_info["index_token_address"]
-                    ]["decimals"]
-                )
+                (raw_position[1][0] / raw_position[1][1])
+                / 10 ** (30 - chain_tokens[market_info["index_token_address"]]["decimals"])
             ),
             "inital_collateral_amount": raw_position[1][2],
-            "inital_collateral_amount_usd": (
-                raw_position[1][2]
-                / 10 ** chain_tokens[raw_position[0][2]]["decimals"],
-            ),
+            "inital_collateral_amount_usd": (raw_position[1][2] / 10 ** chain_tokens[raw_position[0][2]]["decimals"],),
             "leverage": leverage,
             "borrowing_factor": raw_position[1][3],
             "funding_fee_amount_per_size": raw_position[1][4],
@@ -134,17 +107,11 @@ class GetOpenPositions:
             "short_token_claimable_funding_amount_per_size": raw_position[1][6],
             "position_modified_at": "",
             "is_long": raw_position[2][0],
-            "percent_profit": (
-                (
-                    1 - (mark_price / entry_price)
-                ) * leverage
-            ) * 100,
-            "mark_price": mark_price
+            "percent_profit": ((1 - (mark_price / entry_price)) * leverage) * 100,
+            "mark_price": mark_price,
         }
 
-    def _query_for_positions(
-        self, address: str, start: int = 0, end: int = 10
-    ):
+    def _query_for_positions(self, address: str, start: int = 0, end: int = 10):
         """
         For a given evm address call the getAccountPositions function from
         the reader contract to return positions for a given start and end
@@ -167,16 +134,9 @@ class GetOpenPositions:
         """
 
         reader_contract = get_reader_contract(self.chain)
-        data_store_contract_address = (
-            contract_map[self.chain]["datastore"]["contract_address"]
-        )
+        data_store_contract_address = contract_map[self.chain]["datastore"]["contract_address"]
 
-        return reader_contract.functions.getAccountPositions(
-            data_store_contract_address,
-            address,
-            start,
-            end
-        ).call()
+        return reader_contract.functions.getAccountPositions(data_store_contract_address, address, start, end).call()
 
 
 if __name__ == "__main__":

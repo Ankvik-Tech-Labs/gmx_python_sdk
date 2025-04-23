@@ -1,21 +1,22 @@
 import logging
-
-from web3 import Web3
+from typing import Optional
 
 from hexbytes import HexBytes
-
-from ..get.get_markets import Markets
-from ..get.get_oracle_prices import OraclePrices
-
-from ..gmx_utils import convert_to_checksum_address, \
-    get_exchange_router_contract, create_connection, \
-    determine_swap_route, contract_map, get_estimated_deposit_amount_out, \
-    check_web3_correct_version
+from web3 import Web3
 
 from ..approve_token_for_spend import check_if_approved
-
 from ..gas_utils import get_execution_fee
-from typing import Optional
+from ..get.get_markets import Markets
+from ..get.get_oracle_prices import OraclePrices
+from ..gmx_utils import (
+    check_web3_correct_version,
+    contract_map,
+    convert_to_checksum_address,
+    create_connection,
+    determine_swap_route,
+    get_estimated_deposit_amount_out,
+    get_exchange_router_contract,
+)
 
 is_newer_version, version = check_web3_correct_version()
 if is_newer_version:
@@ -23,7 +24,6 @@ if is_newer_version:
 
 
 class Deposit:
-
     def __init__(
         self,
         config,
@@ -34,7 +34,7 @@ class Deposit:
         short_token_amount: int,
         max_fee_per_gas: Optional[int] = None,
         debug_mode: bool = False,
-        execution_buffer: float = 1.1
+        execution_buffer: float = 1.1,
     ) -> None:
         self.config = config
         self.market_key = market_key
@@ -52,14 +52,10 @@ class Deposit:
             logging.info(f"Execution buffer set to: {(self.execution_buffer - 1) * 100:.2f}%")
 
         if self.max_fee_per_gas is None:
-            block = create_connection(
-                config
-            ).eth.get_block("latest")
+            block = create_connection(config).eth.get_block("latest")
             self.max_fee_per_gas = block["baseFeePerGas"] * 1.35
 
-        self._exchange_router_contract_obj = get_exchange_router_contract(
-            config
-        )
+        self._exchange_router_contract_obj = get_exchange_router_contract(config)
 
         self._connection = create_connection(config)
 
@@ -69,7 +65,6 @@ class Deposit:
         self.log.info("Creating order...")
 
     def determine_gas_limits(self):
-
         pass
 
     def check_for_approval(self):
@@ -80,24 +75,31 @@ class Deposit:
         spender = contract_map[self.config.chain]["syntheticsrouter"]["contract_address"]
 
         if self.long_token_amount > 0:
-            check_if_approved(self.config,
-                              spender,
-                              self.initial_long_token,
-                              self.long_token_amount,
-                              self.max_fee_per_gas,
-                              approve=True)
+            check_if_approved(
+                self.config,
+                spender,
+                self.initial_long_token,
+                self.long_token_amount,
+                self.max_fee_per_gas,
+                approve=True,
+            )
 
         if self.short_token_amount > 0:
-            check_if_approved(self.config,
-                              spender,
-                              self.initial_short_token,
-                              self.short_token_amount,
-                              self.max_fee_per_gas,
-                              approve=True)
+            check_if_approved(
+                self.config,
+                spender,
+                self.initial_short_token,
+                self.short_token_amount,
+                self.max_fee_per_gas,
+                approve=True,
+            )
 
     def _submit_transaction(
-    self, user_wallet_address: str, value_amount: float,
-    multicall_args: list, gas_limits: dict
+        self,
+        user_wallet_address: str,
+        value_amount: float,
+        multicall_args: list,
+        gas_limits: dict,
     ):
         """
         Submit Transaction
@@ -130,25 +132,19 @@ class Deposit:
 
         # Ensure the signer address matches the wallet address
         if signer.get_address().lower() != wallet_address.lower():
-            self.log.warning(
-                f"Signer address {signer.get_address()} doesn't match wallet address {wallet_address}"
-            )
+            self.log.warning(f"Signer address {signer.get_address()} doesn't match wallet address {wallet_address}")
 
         nonce = self._connection.eth.get_transaction_count(signer.get_address())
 
-        raw_txn = self._exchange_router_contract_obj.functions.multicall(
-            multicall_args
-        ).build_transaction(
+        raw_txn = self._exchange_router_contract_obj.functions.multicall(multicall_args).build_transaction(
             {
                 "from": signer.get_address(),
                 "value": value_amount,
                 "chainId": self.config.chain_id,
-                "gas": (
-                    self._gas_limits_order_type.call() + self._gas_limits_order_type.call()
-                ),
+                "gas": (self._gas_limits_order_type.call() + self._gas_limits_order_type.call()),
                 "maxFeePerGas": int(self.max_fee_per_gas),
                 "maxPriorityFeePerGas": 0,
-                "nonce": nonce
+                "nonce": nonce,
             }
         )
 
@@ -157,9 +153,7 @@ class Deposit:
             tx_hash = signer.send_transaction(raw_txn)
 
             self.log.info("Txn submitted!")
-            self.log.info(
-                f"Check status: https://arbiscan.io/tx/{tx_hash.hex()}"
-            )
+            self.log.info(f"Check status: https://arbiscan.io/tx/{tx_hash.hex()}")
 
             self.log.info("Transaction submitted!")
             return tx_hash
@@ -167,7 +161,6 @@ class Deposit:
         return None
 
     def create_deposit_order(self):
-
         user_wallet_address = self.config.user_wallet_address
         self.determine_gas_limits()
 
@@ -179,18 +172,9 @@ class Deposit:
         eth_zero_address = "0x0000000000000000000000000000000000000000"
         ui_ref_address = "0x0000000000000000000000000000000000000000"
 
-        user_wallet_address = convert_to_checksum_address(
-            self.config,
-            user_wallet_address
-        )
-        eth_zero_address = convert_to_checksum_address(
-            self.config,
-            eth_zero_address
-        )
-        ui_ref_address = convert_to_checksum_address(
-            self.config,
-            ui_ref_address
-        )
+        user_wallet_address = convert_to_checksum_address(self.config, user_wallet_address)
+        eth_zero_address = convert_to_checksum_address(self.config, eth_zero_address)
+        ui_ref_address = convert_to_checksum_address(self.config, ui_ref_address)
 
         # Minimum number of GM tokens we should expect
         min_market_tokens = self._estimate_deposit()
@@ -200,8 +184,9 @@ class Deposit:
             get_execution_fee(
                 self._gas_limits,
                 self._gas_limits_order_type,
-                self._connection.eth.gas_price
-            ) * self.execution_buffer
+                self._connection.eth.gas_price,
+            )
+            * self.execution_buffer
         )
 
         callback_gas_limit = 0
@@ -224,7 +209,7 @@ class Deposit:
             min_market_tokens,
             should_unwrap_native_token,
             execution_fee,
-            callback_gas_limit
+            callback_gas_limit,
         )
 
         multicall_args = []
@@ -233,7 +218,10 @@ class Deposit:
         # Send long side of deposit if more than 0 tokens
         if self.long_token_amount > 0:
             if self.initial_long_token != "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1":
-                multicall_args = [*multicall_args, HexBytes(self._send_tokens(self.initial_long_token, self.long_token_amount))]
+                multicall_args = [
+                    *multicall_args,
+                    HexBytes(self._send_tokens(self.initial_long_token, self.long_token_amount)),
+                ]
 
             # If adding long side with native token append to wnt_amount
             else:
@@ -242,14 +230,20 @@ class Deposit:
         # Send short side of deposit if more than 0 tokens
         if self.short_token_amount > 0:
             if self.initial_short_token != "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1":
-                multicall_args = [*multicall_args, HexBytes(self._send_tokens(self.initial_short_token, self.short_token_amount))]
+                multicall_args = [
+                    *multicall_args,
+                    HexBytes(self._send_tokens(self.initial_short_token, self.short_token_amount)),
+                ]
 
             # If adding short side with native token append to wnt_amount
             else:
                 wnt_amount = wnt_amount + self.short_token_amount
 
         # Send wnt_amount, incl any deposit
-        multicall_args = [*multicall_args, HexBytes(self._send_wnt(int(wnt_amount + execution_fee)))]
+        multicall_args = [
+            *multicall_args,
+            HexBytes(self._send_wnt(int(wnt_amount + execution_fee))),
+        ]
 
         # send our deposit parameters
         multicall_args = [*multicall_args, HexBytes(self._create_order(arguments))]
@@ -258,7 +252,7 @@ class Deposit:
             user_wallet_address,
             int(wnt_amount + execution_fee),
             multicall_args,
-            self._gas_limits
+            self._gas_limits,
         )
 
     def _check_initial_tokens(self):
@@ -268,14 +262,10 @@ class Deposit:
         """
 
         if self.long_token_amount == 0:
-            self.initial_long_token = self.all_markets_info[
-                self.market_key
-            ]["long_token_address"]
+            self.initial_long_token = self.all_markets_info[self.market_key]["long_token_address"]
 
         if self.short_token_amount == 0:
-            self.initial_short_token = self.all_markets_info[
-                self.market_key
-            ]["short_token_address"]
+            self.initial_short_token = self.all_markets_info[self.market_key]["short_token_address"]
 
     def _determine_swap_paths(self):
         """
@@ -286,19 +276,17 @@ class Deposit:
         market = self.all_markets_info[self.market_key]
 
         if market["long_token_address"] != self.initial_long_token:
-
             self.long_token_swap_path, requires_multi_swap = determine_swap_route(
                 self.all_markets_info,
                 self.initial_long_token,
-                market["long_token_address"]
+                market["long_token_address"],
             )
 
         if market["short_token_address"] != self.initial_short_token:
-
             self.short_token_swap_path, requires_multi_swap = determine_swap_route(
                 self.all_markets_info,
                 self.initial_short_token,
-                market["short_token_address"]
+                market["short_token_address"],
             )
 
     def _create_order(self, arguments):
@@ -306,12 +294,12 @@ class Deposit:
         Create Order
         """
         try:
-            return self._exchange_router_contract_obj.encodeABI(
+            return self._exchange_router_contract_obj.encode_abi(
                 "createDeposit",
                 args=[arguments],
             )
         except AttributeError:
-            return self._exchange_router_contract_obj.encode_abi(
+            return self._exchange_router_contract_obj.encodeABI(
                 "createDeposit",
                 args=[arguments],
             )
@@ -321,21 +309,22 @@ class Deposit:
         Send tokens
         """
         try:
-            return self._exchange_router_contract_obj.encodeABI(
-                "sendTokens",
-                args=(
-                    token_address,
-                    "0xF89e77e8Dc11691C9e8757e84aaFbCD8A67d7A55",
-                    amount
-                ),
-            )
-        except AttributeError:
             return self._exchange_router_contract_obj.encode_abi(
                 "sendTokens",
                 args=(
                     token_address,
                     "0xF89e77e8Dc11691C9e8757e84aaFbCD8A67d7A55",
-                    amount
+                    amount,
+                ),
+            )
+
+        except AttributeError:
+            return self._exchange_router_contract_obj.encodeABI(
+                "sendTokens",
+                args=(
+                    token_address,
+                    "0xF89e77e8Dc11691C9e8757e84aaFbCD8A67d7A55",
+                    amount,
                 ),
             )
 
@@ -344,20 +333,12 @@ class Deposit:
         Send WNT
         """
         try:
-            return self._exchange_router_contract_obj.encodeABI(
-                "sendWnt",
-                args=(
-                    "0xF89e77e8Dc11691C9e8757e84aaFbCD8A67d7A55",
-                    amount
-                )
+            return self._exchange_router_contract_obj.encode_abi(
+                "sendWnt", args=("0xF89e77e8Dc11691C9e8757e84aaFbCD8A67d7A55", amount)
             )
         except AttributeError:
-            return self._exchange_router_contract_obj.encode_abi(
-                "sendWnt",
-                args=(
-                    "0xF89e77e8Dc11691C9e8757e84aaFbCD8A67d7A55",
-                    amount
-                )
+            return self._exchange_router_contract_obj.encodeABI(
+                "sendWnt", args=("0xF89e77e8Dc11691C9e8757e84aaFbCD8A67d7A55", amount)
             )
 
     def _estimate_deposit(self):
@@ -372,9 +353,7 @@ class Deposit:
 
         """
 
-        data_store_contract_address = contract_map[
-            self.config.chain
-        ]["datastore"]["contract_address"]
+        data_store_contract_address = contract_map[self.config.chain]["datastore"]["contract_address"]
 
         market = self.all_markets_info[self.market_key]
         oracle_prices_dict = OraclePrices(chain=self.config.chain).get_recent_prices()
@@ -383,23 +362,26 @@ class Deposit:
         long_token_address = market["long_token_address"]
         short_token_address = market["short_token_address"]
 
-        market_addresses = [self.market_key,
-                            index_token_address,
-                            long_token_address,
-                            short_token_address]
+        market_addresses = [
+            self.market_key,
+            index_token_address,
+            long_token_address,
+            short_token_address,
+        ]
         prices = (
             (
                 int(oracle_prices_dict[index_token_address]["minPriceFull"]),
-                int(oracle_prices_dict[index_token_address]["maxPriceFull"])
+                int(oracle_prices_dict[index_token_address]["maxPriceFull"]),
             ),
             (
                 int(oracle_prices_dict[long_token_address]["minPriceFull"]),
-                int(oracle_prices_dict[long_token_address]["maxPriceFull"])
+                int(oracle_prices_dict[long_token_address]["maxPriceFull"]),
             ),
             (
                 int(oracle_prices_dict[short_token_address]["minPriceFull"]),
-                int(oracle_prices_dict[short_token_address]["maxPriceFull"])
-            ))
+                int(oracle_prices_dict[short_token_address]["maxPriceFull"]),
+            ),
+        )
 
         parameters = {
             "data_store_address": data_store_contract_address,

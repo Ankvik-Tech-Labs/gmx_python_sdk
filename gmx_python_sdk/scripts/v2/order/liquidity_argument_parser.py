@@ -2,37 +2,32 @@ import numpy as np
 
 from ..get.get_markets import Markets
 from ..get.get_oracle_prices import OraclePrices
-
 from ..gmx_utils import get_tokens_address_dict
 
 
 class LiquidityArgumentParser:
-
     def __init__(self, config, is_deposit: bool = False, is_withdrawal: bool = False):
-
         self.parameters_dict = None
         self.is_deposit = is_deposit
         self.is_withdrawal = is_withdrawal
         self.config = config
 
         if is_deposit:
-
             self.required_keys = [
                 "chain",
                 "market_key",
                 "long_token_address",
                 "short_token_address",
                 "long_token_amount",
-                "short_token_amount"
+                "short_token_amount",
             ]
 
         if is_withdrawal:
-
             self.required_keys = [
                 "chain",
                 "market_key",
                 "out_token_address",
-                "gm_amount"
+                "gm_amount",
             ]
 
         self.missing_base_key_methods = {
@@ -42,7 +37,7 @@ class LiquidityArgumentParser:
             "short_token_address": self._handle_missing_short_token_address,
             "long_token_amount": self._handle_missing_long_token_amount,
             "short_token_amount": self._handle_missing_short_token_amount,
-            "out_token_address": self._handle_missing_out_token_address
+            "out_token_address": self._handle_missing_out_token_address,
         }
 
     def process_parameters_dictionary(self, parameters_dict):
@@ -112,11 +107,7 @@ class LiquidityArgumentParser:
             raise Exception(msg)
 
         self.parameters_dict["market_token_address"] = self.find_key_by_symbol(
-            get_tokens_address_dict(
-                self.parameters_dict["chain"]
-            ),
-            token_symbol
-
+            get_tokens_address_dict(self.parameters_dict["chain"]), token_symbol
         )
 
     def _handle_missing_market_key(self):
@@ -129,8 +120,7 @@ class LiquidityArgumentParser:
 
         # use the index token address to find the market key from get_available_markets
         self.parameters_dict["market_key"] = self.find_market_key_by_index_address(
-            Markets(self.config).get_available_markets(),
-            index_token_address
+            Markets(self.config).get_available_markets(), index_token_address
         )
 
     def _handle_missing_long_token_address(self):
@@ -143,9 +133,7 @@ class LiquidityArgumentParser:
             long_token_symbol = self.parameters_dict["long_token_symbol"]
 
             if long_token_symbol == "BTC":
-                self.parameters_dict[
-                    "long_token_address"
-                ] = "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f"
+                self.parameters_dict["long_token_address"] = "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f"
                 return
             if long_token_symbol is None:
                 raise KeyError
@@ -155,9 +143,7 @@ class LiquidityArgumentParser:
 
         # search the known tokens for a contract address using the user supplied symbol
         self.parameters_dict["long_token_address"] = self.find_key_by_symbol(
-            get_tokens_address_dict(
-                self.parameters_dict["chain"]),
-            long_token_symbol
+            get_tokens_address_dict(self.parameters_dict["chain"]), long_token_symbol
         )
 
     def _handle_missing_short_token_address(self):
@@ -176,9 +162,7 @@ class LiquidityArgumentParser:
 
         # search the known tokens for a contract address using the user supplied symbol
         self.parameters_dict["short_token_address"] = self.find_key_by_symbol(
-            get_tokens_address_dict(
-                self.parameters_dict["chain"]),
-            short_token_symbol
+            get_tokens_address_dict(self.parameters_dict["chain"]), short_token_symbol
         )
 
     def _handle_missing_out_token_address(self):
@@ -198,9 +182,7 @@ class LiquidityArgumentParser:
 
         # search the known tokens for a contract address using the user supplied symbol
         out_token_address = self.find_key_by_symbol(
-            get_tokens_address_dict(
-                self.parameters_dict["chain"]),
-            out_token_symbol
+            get_tokens_address_dict(self.parameters_dict["chain"]), out_token_symbol
         )
 
         markets = Markets(self.config).get_available_markets()
@@ -209,10 +191,12 @@ class LiquidityArgumentParser:
         if out_token_symbol == "BTC":
             out_token_address = "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f"
 
-        if out_token_address not in [market["long_token_address"], market["short_token_address"]]:
+        if out_token_address not in [
+            market["long_token_address"],
+            market["short_token_address"],
+        ]:
             msg = "Out token must be either the long or short token of the market"
-            raise Exception(
-                msg)
+            raise Exception(msg)
         else:
             self.parameters_dict["out_token_address"] = out_token_address
 
@@ -227,18 +211,19 @@ class LiquidityArgumentParser:
             return
         prices = OraclePrices(chain=self.config.chain).get_recent_prices()
         price = np.median(
-            [float(prices[self.parameters_dict["long_token_address"]]["maxPriceFull"]),
-             float(prices[self.parameters_dict["long_token_address"]]["minPriceFull"])]
+            [
+                float(prices[self.parameters_dict["long_token_address"]]["maxPriceFull"]),
+                float(prices[self.parameters_dict["long_token_address"]]["minPriceFull"]),
+            ]
         )
-        decimal = get_tokens_address_dict(
-            self.parameters_dict["chain"]
-        )[self.parameters_dict["long_token_address"]]["decimals"]
+        decimal = get_tokens_address_dict(self.parameters_dict["chain"])[self.parameters_dict["long_token_address"]][
+            "decimals"
+        ]
         oracle_factor = decimal - 30
 
-        price = price * 10 ** oracle_factor
+        price = price * 10**oracle_factor
 
-        self.parameters_dict["long_token_amount"] = int((
-            self.parameters_dict["long_token_usd"] / price) * 10**decimal)
+        self.parameters_dict["long_token_amount"] = int((self.parameters_dict["long_token_usd"] / price) * 10**decimal)
 
     def _handle_missing_short_token_amount(self):
         """
@@ -252,18 +237,21 @@ class LiquidityArgumentParser:
 
         prices = OraclePrices(chain=self.parameters_dict["chain"]).get_recent_prices()
         price = np.median(
-            [float(prices[self.parameters_dict["short_token_address"]]["maxPriceFull"]),
-             float(prices[self.parameters_dict["short_token_address"]]["minPriceFull"])]
+            [
+                float(prices[self.parameters_dict["short_token_address"]]["maxPriceFull"]),
+                float(prices[self.parameters_dict["short_token_address"]]["minPriceFull"]),
+            ]
         )
-        decimal = get_tokens_address_dict(
-            self.parameters_dict["chain"]
-        )[self.parameters_dict["short_token_address"]]["decimals"]
+        decimal = get_tokens_address_dict(self.parameters_dict["chain"])[self.parameters_dict["short_token_address"]][
+            "decimals"
+        ]
         oracle_factor = decimal - 30
 
-        price = price * 10 ** oracle_factor
+        price = price * 10**oracle_factor
 
-        self.parameters_dict["short_token_amount"] = int((
-            self.parameters_dict["short_token_usd"] / price) * 10**decimal)
+        self.parameters_dict["short_token_amount"] = int(
+            (self.parameters_dict["short_token_usd"] / price) * 10**decimal
+        )
 
     @staticmethod
     def find_key_by_symbol(input_dict: dict, search_symbol: str):

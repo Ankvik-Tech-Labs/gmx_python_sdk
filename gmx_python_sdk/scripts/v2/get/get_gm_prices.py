@@ -1,13 +1,11 @@
-from .get import GetData
 from ..gmx_utils import (
     execute_threading,
-    save_json_file_to_datastore, make_timestamped_dataframe,
-    save_csv_to_datastore
+    make_timestamped_dataframe,
+    save_csv_to_datastore,
+    save_json_file_to_datastore,
 )
-from ..keys import (
-    MAX_PNL_FACTOR_FOR_TRADERS, MAX_PNL_FACTOR_FOR_DEPOSITS,
-    MAX_PNL_FACTOR_FOR_WITHDRAWALS
-)
+from ..keys import MAX_PNL_FACTOR_FOR_DEPOSITS, MAX_PNL_FACTOR_FOR_TRADERS, MAX_PNL_FACTOR_FOR_WITHDRAWALS
+from .get import GetData
 
 
 class GMPrices(GetData):
@@ -105,20 +103,14 @@ class GMPrices(GetData):
 
         for _iter, market_key in enumerate(self.markets.info):
             self._get_token_addresses(market_key)
-            index_token_address = self.markets.get_index_token_address(
-                market_key
-            )
-            oracle_prices = self._get_oracle_prices(
-                market_key,
-                index_token_address,
-                return_tuple=True
-            )
+            index_token_address = self.markets.get_index_token_address(market_key)
+            oracle_prices = self._get_oracle_prices(market_key, index_token_address, return_tuple=True)
 
             market = [
                 market_key,
                 index_token_address,
                 self._long_token_address,
-                self._short_token_address
+                self._short_token_address,
             ]
 
             output = self._make_market_token_price_query(
@@ -126,7 +118,7 @@ class GMPrices(GetData):
                 oracle_prices[0],
                 oracle_prices[1],
                 oracle_prices[2],
-                pnl_factor_type
+                pnl_factor_type,
             )
 
             # add the uncalled web3 object to list
@@ -144,17 +136,12 @@ class GMPrices(GetData):
 
         if self.to_json:
             filename = f"{self.config.chain}_gm_prices.json"
-            save_json_file_to_datastore(
-                filename,
-                self.output
-            )
+            save_json_file_to_datastore(filename, self.output)
 
         if self.to_csv:
             dataframe = make_timestamped_dataframe(self.output)
 
-            save_csv_to_datastore(
-                f"{self.config.chain}_gm_prices.csv",
-                dataframe)
+            save_csv_to_datastore(f"{self.config.chain}_gm_prices.csv", dataframe)
 
         self.output["parameter"] = "gm_prices"
         del self.output["long"]
@@ -163,12 +150,12 @@ class GMPrices(GetData):
         return self.output
 
     def _make_market_token_price_query(
-            self,
-            market: list,
-            index_price_tuple: tuple,
-            long_price_tuple: tuple,
-            short_price_tuple: tuple,
-            pnl_factor_type
+        self,
+        market: list,
+        index_price_tuple: tuple,
+        long_price_tuple: tuple,
+        short_price_tuple: tuple,
+        pnl_factor_type,
     ):
         """
         Get the raw GM price from the reader contract for a given market tuple,
@@ -203,7 +190,7 @@ class GMPrices(GetData):
             long_price_tuple,
             short_price_tuple,
             pnl_factor_type,
-            maximise
+            maximise,
         )
 
         return output

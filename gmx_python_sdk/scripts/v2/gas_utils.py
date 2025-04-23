@@ -1,11 +1,14 @@
+from .gmx_utils import apply_factor, create_connection, get_datastore_contract
 from .keys import (
-    decrease_order_gas_limit_key, increase_order_gas_limit_key,
-    execution_gas_fee_base_amount_key, execution_gas_fee_multiplier_key,
-    single_swap_gas_limit_key, swap_order_gas_limit_key, deposit_gas_limit_key,
-    withdraw_gas_limit_key
+    decrease_order_gas_limit_key,
+    deposit_gas_limit_key,
+    execution_gas_fee_base_amount_key,
+    execution_gas_fee_multiplier_key,
+    increase_order_gas_limit_key,
+    single_swap_gas_limit_key,
+    swap_order_gas_limit_key,
+    withdraw_gas_limit_key,
 )
-
-from .gmx_utils import apply_factor, get_datastore_contract, create_connection
 
 
 def get_execution_fee(gas_limits: dict, estimated_gas_limit, gas_price: int):
@@ -26,8 +29,7 @@ def get_execution_fee(gas_limits: dict, estimated_gas_limit, gas_price: int):
 
     base_gas_limit = gas_limits["estimated_fee_base_gas_limit"].call()
     multiplier_factor = gas_limits["estimated_fee_multiplier_factor"].call()
-    adjusted_gas_limit = base_gas_limit + apply_factor(estimated_gas_limit.call(),
-                                                       multiplier_factor)
+    adjusted_gas_limit = base_gas_limit + apply_factor(estimated_gas_limit.call(), multiplier_factor)
 
     return adjusted_gas_limit * gas_price
 
@@ -50,16 +52,14 @@ def get_gas_limits(datastore_object):
         "swap_order": datastore_object.functions.getUint(swap_order_gas_limit_key()),
         "increase_order": datastore_object.functions.getUint(increase_order_gas_limit_key()),
         "decrease_order": datastore_object.functions.getUint(decrease_order_gas_limit_key()),
-        "estimated_fee_base_gas_limit": datastore_object.functions.getUint(
-            execution_gas_fee_base_amount_key()),
-        "estimated_fee_multiplier_factor": datastore_object.functions.getUint(
-            execution_gas_fee_multiplier_key())}
+        "estimated_fee_base_gas_limit": datastore_object.functions.getUint(execution_gas_fee_base_amount_key()),
+        "estimated_fee_multiplier_factor": datastore_object.functions.getUint(execution_gas_fee_multiplier_key()),
+    }
 
     return gas_limits
 
 
 if __name__ == "__main__":
-
     chain = "arbitrum"
     connection = create_connection(chain=chain)
     datastore_object = get_datastore_contract(chain)

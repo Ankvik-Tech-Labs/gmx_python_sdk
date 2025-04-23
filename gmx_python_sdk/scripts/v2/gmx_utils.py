@@ -1,31 +1,26 @@
-from eth_abi import encode
-from web3 import Web3
-import yaml
+import json
 import logging
 import os
-import json
-import requests
-
-import pandas as pd
-
-from datetime import datetime
-
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from typing import Optional
 
+import pandas as pd
+import requests
+import yaml
+from eth_abi import encode
+from web3 import Web3
 
 # Get the absolute path of the current script
 current_script_path = os.path.abspath(__file__)
-base_dir = os.path.abspath(
-    os.path.join(current_script_path, "..", "..", "..", "..")
-)
+base_dir = os.path.abspath(os.path.join(current_script_path, "..", "..", "..", ".."))
 package_dir = base_dir + "/gmx_python_sdk/"
 
 logging.basicConfig(
     format="{asctime} {levelname}: {message}",
     datefmt="%m/%d/%Y %I:%M:%S %p",
     style="{",
-    level=logging.INFO
+    level=logging.INFO,
 )
 
 
@@ -41,102 +36,82 @@ def execute_threading(function_calls):
 
 
 contract_map = {
-    "arbitrum":
-    {
-        "datastore":
-        {
+    "arbitrum": {
+        "datastore": {
             "contract_address": "0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8",
-            "abi_path": "contracts/arbitrum/datastore.json"
+            "abi_path": "contracts/arbitrum/datastore.json",
         },
-        "eventemitter":
-        {
+        "eventemitter": {
             "contract_address": "0xC8ee91A54287DB53897056e12D9819156D3822Fb",
-            "abi_path": "contracts/arbitrum/eventemitter.json"
+            "abi_path": "contracts/arbitrum/eventemitter.json",
         },
-        "exchangerouter":
-        {
+        "exchangerouter": {
             "contract_address": "0x900173A66dbD345006C51fA35fA3aB760FcD843b",
-            "abi_path": "contracts/arbitrum/exchangerouter.json"
+            "abi_path": "contracts/arbitrum/exchangerouter.json",
         },
-        "depositvault":
-        {
+        "depositvault": {
             "contract_address": "0xF89e77e8Dc11691C9e8757e84aaFbCD8A67d7A55",
-            "abi_path": "contracts/arbitrum/depositvault.json"
+            "abi_path": "contracts/arbitrum/depositvault.json",
         },
-        "withdrawalvault":
-        {
+        "withdrawalvault": {
             "contract_address": "0x0628D46b5D145f183AdB6Ef1f2c97eD1C4701C55",
-            "abi_path": "contracts/arbitrum/withdrawalvault.json"
+            "abi_path": "contracts/arbitrum/withdrawalvault.json",
         },
-        "ordervault":
-        {
+        "ordervault": {
             "contract_address": "0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5",
-            "abi_path": "contracts/arbitrum/ordervault.json"
+            "abi_path": "contracts/arbitrum/ordervault.json",
         },
-        "syntheticsreader":
-        {
+        "syntheticsreader": {
             "contract_address": "0x0537C767cDAC0726c76Bb89e92904fe28fd02fE1",
-            "abi_path": "contracts/arbitrum/syntheticsreader.json"
+            "abi_path": "contracts/arbitrum/syntheticsreader.json",
         },
-        "syntheticsrouter":
-        {
+        "syntheticsrouter": {
             "contract_address": "0x7452c558d45f8afC8c83dAe62C3f8A5BE19c71f6",
-            "abi_path": "contracts/arbitrum/syntheticsrouter.json"
+            "abi_path": "contracts/arbitrum/syntheticsrouter.json",
         },
-        "glvreader":
-        {
+        "glvreader": {
             "contract_address": "0xd4f522c4339Ae0A90a156bd716715547e44Bed65",
-            "abi_path": "contracts/arbitrum/glvreader.json"
-        }
+            "abi_path": "contracts/arbitrum/glvreader.json",
+        },
     },
-    "avalanche":
-    {
-        "datastore":
-        {
+    "avalanche": {
+        "datastore": {
             "contract_address": "0x2F0b22339414ADeD7D5F06f9D604c7fF5b2fe3f6",
-            "abi_path": "contracts/avalanche/datastore.json"
+            "abi_path": "contracts/avalanche/datastore.json",
         },
-        "eventemitter":
-        {
+        "eventemitter": {
             "contract_address": "0xDb17B211c34240B014ab6d61d4A31FA0C0e20c26",
-            "abi_path": "contracts/avalanche/eventemitter.json"
+            "abi_path": "contracts/avalanche/eventemitter.json",
         },
-        "exchangerouter":
-        {
+        "exchangerouter": {
             "contract_address": "0x2b76df209E1343da5698AF0f8757f6170162e78b",
-            "abi_path": "contracts/avalanche/exchangerouter.json"
+            "abi_path": "contracts/avalanche/exchangerouter.json",
         },
-        "depositvault":
-        {
+        "depositvault": {
             "contract_address": "0x90c670825d0C62ede1c5ee9571d6d9a17A722DFF",
-            "abi_path": "contracts/avalanche/depositvault.json"
+            "abi_path": "contracts/avalanche/depositvault.json",
         },
-        "withdrawalvault":
-        {
+        "withdrawalvault": {
             "contract_address": "0xf5F30B10141E1F63FC11eD772931A8294a591996",
-            "abi_path": "contracts/avalanche/withdrawalvault.json"
+            "abi_path": "contracts/avalanche/withdrawalvault.json",
         },
-        "ordervault":
-        {
+        "ordervault": {
             "contract_address": "0xD3D60D22d415aD43b7e64b510D86A30f19B1B12C",
-            "abi_path": "contracts/avalanche/ordervault.json"
+            "abi_path": "contracts/avalanche/ordervault.json",
         },
-        "syntheticsreader":
-        {
+        "syntheticsreader": {
             "contract_address": "0x618fCEe30D9A26e8533C3B244CAd2D6486AFf655",
-            "abi_path": "contracts/avalanche/syntheticsreader.json"
+            "abi_path": "contracts/avalanche/syntheticsreader.json",
         },
-        "syntheticsrouter":
-        {
+        "syntheticsrouter": {
             "contract_address": "0x820F5FfC5b525cD4d88Cd91aCf2c28F16530Cc68",
-            "abi_path": "contracts/avalanche/syntheticsrouter.json"
+            "abi_path": "contracts/avalanche/syntheticsrouter.json",
         },
-        "glvreader":
-        {
+        "glvreader": {
             "contract_address": "0xae9596a1C438675AcC75f69d32E21Ac9c8fF99bD",
-            "abi_path": "contracts/avalanche/glvreader.json"
-        }
-    }
+            "abi_path": "contracts/avalanche/glvreader.json",
+        },
+    },
 }
 
 
@@ -151,7 +126,7 @@ class ConfigManager:
         private_key=None,
         tg_bot_token=None,
         config: Optional[dict] = None,
-        signer=None
+        signer=None,
     ):
         self.chain = chain
         self.rpc = rpc
@@ -243,9 +218,9 @@ class ConfigManager:
             self._signer = create_signer(web3_conn, self.private_key)
 
             # If user_wallet_address is set but doesn't match signer address, warn
-            if (self.user_wallet_address and
-                self.user_wallet_address.lower() != self._signer.get_address().lower()):
+            if self.user_wallet_address and self.user_wallet_address.lower() != self._signer.get_address().lower():
                 import logging
+
                 logging.warning(
                     f"Configured wallet address {self.user_wallet_address} doesn't match "
                     f"signer address {self._signer.get_address()}"
@@ -294,9 +269,9 @@ def convert_to_checksum_address(config, address: str):
 
     # Added to support older versions of web3.py for now
     try:
-        return web3_obj.toChecksumAddress(address)
-    except AttributeError:
         return web3_obj.to_checksum_address(address)
+    except AttributeError:
+        return web3_obj.toChecksumAddress(address)
 
 
 def get_contract_object(web3_obj, contract_name: str, chain: str):
@@ -326,14 +301,11 @@ def get_contract_object(web3_obj, contract_name: str, chain: str):
             os.path.join(
                 base_dir,
                 "gmx_python_sdk",
-                contract_map[chain][contract_name]["abi_path"]
+                contract_map[chain][contract_name]["abi_path"],
             )
         )
     )
-    return web3_obj.eth.contract(
-        address=contract_address,
-        abi=contract_abi
-    )
+    return web3_obj.eth.contract(address=contract_address, abi=contract_abi)
 
 
 def get_token_balance_contract(config: str, contract_address: str):
@@ -350,19 +322,8 @@ def get_token_balance_contract(config: str, contract_address: str):
     """
 
     web3_obj = create_connection(config)
-    contract_abi = json.load(
-        open(
-            os.path.join(
-                package_dir,
-                "contracts",
-                "balance_abi.json"
-            )
-        )
-    )
-    return web3_obj.eth.contract(
-        address=contract_address,
-        abi=contract_abi
-    )
+    contract_abi = json.load(open(os.path.join(package_dir, "contracts", "balance_abi.json")))
+    return web3_obj.eth.contract(address=contract_address, abi=contract_abi)
 
 
 def get_tokens_address_dict(chain: str):
@@ -382,7 +343,7 @@ def get_tokens_address_dict(chain: str):
     """
     url = {
         "arbitrum": "https://arbitrum-api.gmxinfra.io/tokens",
-        "avalanche": "https://avalanche-api.gmxinfra.io/tokens"
+        "avalanche": "https://avalanche-api.gmxinfra.io/tokens",
     }
 
     try:
@@ -390,7 +351,6 @@ def get_tokens_address_dict(chain: str):
 
         # Check if the request was successful (status code 200)
         if response.status_code == 200:
-
             # Parse the JSON response
             token_infos = response.json()["tokens"]
         else:
@@ -418,11 +378,7 @@ def get_reader_contract(config):
     """
 
     web3_obj = create_connection(config)
-    return get_contract_object(
-        web3_obj,
-        "syntheticsreader",
-        config.chain
-    )
+    return get_contract_object(web3_obj, "syntheticsreader", config.chain)
 
 
 def get_event_emitter_contract(config):
@@ -437,11 +393,7 @@ def get_event_emitter_contract(config):
     """
 
     web3_obj = create_connection(config)
-    return get_contract_object(
-        web3_obj,
-        "eventemitter",
-        config.chain
-    )
+    return get_contract_object(web3_obj, "eventemitter", config.chain)
 
 
 def get_datastore_contract(config):
@@ -456,11 +408,7 @@ def get_datastore_contract(config):
     """
 
     web3_obj = create_connection(config)
-    return get_contract_object(
-        web3_obj,
-        "datastore",
-        config.chain
-    )
+    return get_contract_object(web3_obj, "datastore", config.chain)
 
 
 def get_exchange_router_contract(config):
@@ -475,11 +423,7 @@ def get_exchange_router_contract(config):
     """
 
     web3_obj = create_connection(config)
-    return get_contract_object(
-        web3_obj,
-        "exchangerouter",
-        config.chain
-    )
+    return get_contract_object(web3_obj, "exchangerouter", config.chain)
 
 
 def get_glv_reader_contract(config):
@@ -494,11 +438,7 @@ def get_glv_reader_contract(config):
     """
 
     web3_obj = create_connection(config)
-    return get_contract_object(
-        web3_obj,
-        "glvreader",
-        config.chain
-    )
+    return get_contract_object(web3_obj, "glvreader", config.chain)
 
 
 def create_signer(config: str):
@@ -559,9 +499,7 @@ def create_hash_string(string: str):
     return create_hash(["string"], [string])
 
 
-def get_execution_price_and_price_impact(
-    config, params: dict, decimals: int
-):
+def get_execution_price_and_price_impact(config, params: dict, decimals: int):
     """
     Get the execution price and price impact for a position
 
@@ -587,8 +525,10 @@ def get_execution_price_and_price_impact(
         params["is_long"],
     ).call()
 
-    return {"execution_price": output[2] / 10**(PRECISION - decimals),
-            "price_impact_usd": output[0] / 10**PRECISION}
+    return {
+        "execution_price": output[2] / 10 ** (PRECISION - decimals),
+        "price_impact_usd": output[0] / 10**PRECISION,
+    }
 
 
 def get_estimated_swap_output(config, params: dict):
@@ -615,9 +555,7 @@ def get_estimated_swap_output(config, params: dict):
         params["ui_fee_receiver"],
     ).call()
 
-    return {"out_token_amount": output[0],
-            "price_impact_usd": output[1]
-            }
+    return {"out_token_amount": output[0], "price_impact_usd": output[1]}
 
 
 def get_estimated_deposit_amount_out(config, params: dict):
@@ -643,7 +581,7 @@ def get_estimated_deposit_amount_out(config, params: dict):
         params["short_token_amount"],
         params["ui_fee_receiver"],
         params["swap_pricing_type"],
-        params["include_virtual_inventory_impact"]
+        params["include_virtual_inventory_impact"],
     ).call()
 
     return output
@@ -721,8 +659,11 @@ def apply_factor(value, factor):
 
 
 def get_funding_factor_per_period(
-    market_info: dict, is_long: bool, period_in_seconds: int,
-    long_interest_usd: int, short_interest_usd: int
+    market_info: dict,
+    is_long: bool,
+    period_in_seconds: int,
+    long_interest_usd: int,
+    short_interest_usd: int,
 ):
     """
     For a given market, calculate the funding factor for a given period
@@ -742,9 +683,7 @@ def get_funding_factor_per_period(
 
     """
 
-    funding_factor_per_second = (
-        market_info["funding_factor_per_second"] * 10**-28
-    )
+    funding_factor_per_second = market_info["funding_factor_per_second"] * 10**-28
 
     long_pays_shorts = market_info["is_long_pays_short"]
 
@@ -787,11 +726,7 @@ def save_json_file_to_datastore(filename: str, data: dict):
         dictionary of data.
 
     """
-    filepath = os.path.join(
-        package_dir,
-        "data_store",
-        filename
-    )
+    filepath = os.path.join(package_dir, "data_store", filename)
 
     with open(filepath, "w") as f:
         json.dump(data, f)
@@ -826,29 +761,14 @@ def save_csv_to_datastore(filename: str, dataframe):
 
     """
 
-    archive_filepath = os.path.join(
-        package_dir,
-        "data_store",
-        filename
-    )
+    archive_filepath = os.path.join(package_dir, "data_store", filename)
 
     if os.path.exists(archive_filepath):
-        archive = pd.read_csv(
-            archive_filepath
-        )
+        archive = pd.read_csv(archive_filepath)
 
-        dataframe = pd.concat(
-            [archive, dataframe]
-        )
+        dataframe = pd.concat([archive, dataframe])
 
-    dataframe.to_csv(
-        os.path.join(
-            package_dir,
-            "data_store",
-            filename
-        ),
-        index=False
-    )
+    dataframe.to_csv(os.path.join(package_dir, "data_store", filename), index=False)
 
 
 def determine_swap_route(markets: dict, in_token: str, out_token: str):
@@ -881,28 +801,24 @@ def determine_swap_route(markets: dict, in_token: str, out_token: str):
         out_token = "0x47904963fc8b2340414262125aF798B9655E58Cd"
 
     if in_token == "0xaf88d065e77c8cC2239327C5EDb3A432268e5831":
-        gmx_market_address = find_dictionary_by_key_value(
-            markets,
-            "index_token_address",
-            out_token
-        )["gmx_market_address"]
+        gmx_market_address = find_dictionary_by_key_value(markets, "index_token_address", out_token)[
+            "gmx_market_address"
+        ]
     else:
-        gmx_market_address = find_dictionary_by_key_value(
-            markets,
-            "index_token_address",
-            in_token
-        )["gmx_market_address"]
+        gmx_market_address = find_dictionary_by_key_value(markets, "index_token_address", in_token)[
+            "gmx_market_address"
+        ]
 
     is_requires_multi_swap = False
 
-    if out_token != "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" and \
-            in_token != "0xaf88d065e77c8cC2239327C5EDb3A432268e5831":
+    if (
+        out_token != "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
+        and in_token != "0xaf88d065e77c8cC2239327C5EDb3A432268e5831"
+    ):
         is_requires_multi_swap = True
-        second_gmx_market_address = find_dictionary_by_key_value(
-            markets,
-            "index_token_address",
-            out_token
-        )["gmx_market_address"]
+        second_gmx_market_address = find_dictionary_by_key_value(markets, "index_token_address", out_token)[
+            "gmx_market_address"
+        ]
 
         return [gmx_market_address, second_gmx_market_address], is_requires_multi_swap
 

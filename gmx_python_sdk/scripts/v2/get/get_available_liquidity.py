@@ -1,17 +1,14 @@
 import time
+from typing import Any
 
 import numpy as np
 from numerize import numerize
-from typing import Any
 
-from .get import GetData
-from .get_oracle_prices import OraclePrices
-from .get_open_interest import OpenInterest
 from ..gmx_utils import execute_threading
-from ..keys import (
-    get_datastore_contract, pool_amount_key, reserve_factor_key,
-    open_interest_reserve_factor_key
-)
+from ..keys import get_datastore_contract, open_interest_reserve_factor_key, pool_amount_key, reserve_factor_key
+from .get import GetData
+from .get_open_interest import OpenInterest
+from .get_oracle_prices import OraclePrices
 
 
 class GetAvailableLiquidity(GetData):
@@ -30,9 +27,7 @@ class GetAvailableLiquidity(GetData):
         """
         self.log.info("GMX v2 Available Liquidity")
 
-        open_interest = OpenInterest(self.config).get_data(
-            to_json=False
-        )
+        open_interest = OpenInterest(self.config).get_data(to_json=False)
 
         reserved_long_list = []
         reserved_short_list = []
@@ -51,19 +46,11 @@ class GetAvailableLiquidity(GetData):
             self._filter_swap_markets()
             self._get_token_addresses(market_key)
             market_symbol = self.markets.get_market_symbol(market_key)
-            long_decimal_factor = self.markets.get_decimal_factor(
-                market_key=market_key,
-                long=True,
-                short=False
-            )
-            short_decimal_factor = self.markets.get_decimal_factor(
-                market_key=market_key,
-                long=False,
-                short=True
-            )
-            long_precision = 10**(30 + long_decimal_factor)
-            short_precision = 10**(30 + short_decimal_factor)
-            oracle_precision = 10**(30 - long_decimal_factor)
+            long_decimal_factor = self.markets.get_decimal_factor(market_key=market_key, long=True, short=False)
+            short_decimal_factor = self.markets.get_decimal_factor(market_key=market_key, long=False, short=True)
+            long_precision = 10 ** (30 + long_decimal_factor)
+            short_precision = 10 ** (30 + short_decimal_factor)
+            oracle_precision = 10 ** (30 - long_decimal_factor)
 
             # collate market symbol to map dictionary later
             mapper.append(market_symbol)
@@ -72,48 +59,32 @@ class GetAvailableLiquidity(GetData):
             (
                 long_pool_amount,
                 long_reserve_factor,
-                long_open_interest_reserve_factor
-            ) = self.get_max_reserved_usd(
-                market_key,
-                self._long_token_address,
-                True
-            )
+                long_open_interest_reserve_factor,
+            ) = self.get_max_reserved_usd(market_key, self._long_token_address, True)
             reserved_long_list.append(open_interest["long"][market_symbol])
             long_pool_amount_list.append(long_pool_amount)
             long_reserve_factor_list.append(long_reserve_factor)
-            long_open_interest_reserve_factor_list.append(
-                long_open_interest_reserve_factor
-            )
+            long_open_interest_reserve_factor_list.append(long_open_interest_reserve_factor)
             long_precision_list.append(long_precision)
 
             # SHORT POOL
             (
                 short_pool_amount,
                 short_reserve_factor,
-                short_open_interest_reserve_factor
-            ) = self.get_max_reserved_usd(
-                market_key,
-                self._short_token_address,
-                False
-            )
+                short_open_interest_reserve_factor,
+            ) = self.get_max_reserved_usd(market_key, self._short_token_address, False)
             reserved_short_list.append(open_interest["short"][market_symbol])
             short_pool_amount_list.append(short_pool_amount)
             short_reserve_factor_list.append(short_reserve_factor)
-            short_open_interest_reserve_factor_list.append(
-                short_open_interest_reserve_factor
-            )
+            short_open_interest_reserve_factor_list.append(short_open_interest_reserve_factor)
             short_precision_list.append(short_precision)
 
             # Calculate token price
             prices = OraclePrices(chain=self.config.chain).get_recent_prices()
             token_price = np.median(
                 [
-                    float(
-                        prices[self._long_token_address]["maxPriceFull"]
-                    ) / oracle_precision,
-                    float(
-                        prices[self._long_token_address]["minPriceFull"]
-                    ) / oracle_precision
+                    float(prices[self._long_token_address]["maxPriceFull"]) / oracle_precision,
+                    float(prices[self._long_token_address]["minPriceFull"]) / oracle_precision,
                 ]
             )
             token_price_list.append(token_price)
@@ -126,24 +97,16 @@ class GetAvailableLiquidity(GetData):
         short_pool_amount_output = execute_threading(short_pool_amount_list)
         time.sleep(0.2)
 
-        long_reserve_factor_list_output = execute_threading(
-            long_reserve_factor_list
-        )
+        long_reserve_factor_list_output = execute_threading(long_reserve_factor_list)
         time.sleep(0.2)
 
-        short_reserve_factor_list_output = execute_threading(
-            short_reserve_factor_list
-        )
+        short_reserve_factor_list_output = execute_threading(short_reserve_factor_list)
         time.sleep(0.2)
 
-        long_open_interest_reserve_factor_list_output = execute_threading(
-            long_open_interest_reserve_factor_list
-        )
+        long_open_interest_reserve_factor_list_output = execute_threading(long_open_interest_reserve_factor_list)
         time.sleep(0.2)
 
-        short_open_interest_reserve_factor_list_output = execute_threading(
-            short_open_interest_reserve_factor_list
-        )
+        short_open_interest_reserve_factor_list_output = execute_threading(short_open_interest_reserve_factor_list)
 
         for (
             long_pool_amount,
@@ -157,7 +120,7 @@ class GetAvailableLiquidity(GetData):
             token_price,
             token_symbol,
             long_precision,
-            short_precision
+            short_precision,
         ) in zip(
             long_pool_amount_output,
             short_pool_amount_output,
@@ -170,63 +133,45 @@ class GetAvailableLiquidity(GetData):
             token_price_list,
             mapper,
             long_precision_list,
-            short_precision_list
+            short_precision_list,
         ):
             self.log.info(f"Token: {token_symbol}")
 
             # select the lesser of maximum value of pool reserves or open
             # interest limit
-            if long_open_interest_reserve_factor < long_reserve_factor:
-                long_reserve_factor = long_open_interest_reserve_factor
+            long_reserve_factor = min(long_reserve_factor, long_open_interest_reserve_factor)
 
             if "2" in token_symbol:
                 long_pool_amount = long_pool_amount / 2
 
-            long_max_reserved_tokens = (
-                long_pool_amount * long_reserve_factor
-            )
+            long_max_reserved_tokens = long_pool_amount * long_reserve_factor
 
-            long_max_reserved_usd = (
-                long_max_reserved_tokens / long_precision * token_price
-            )
+            long_max_reserved_usd = long_max_reserved_tokens / long_precision * token_price
 
             long_liquidity = long_max_reserved_usd - float(reserved_long)
 
-            self.log.info(
-                f"Available Long Liquidity: ${numerize.numerize(long_liquidity)}"
-            )
+            self.log.info(f"Available Long Liquidity: ${numerize.numerize(long_liquidity)}")
 
             # select the lesser of maximum value of pool reserves or open
             # interest limit
-            if short_open_interest_reserve_factor < short_reserve_factor:
-                short_reserve_factor = short_open_interest_reserve_factor
+            short_reserve_factor = min(short_reserve_factor, short_open_interest_reserve_factor)
 
-            short_max_reserved_usd = (short_pool_amount * short_reserve_factor)
+            short_max_reserved_usd = short_pool_amount * short_reserve_factor
 
-            short_liquidity = (
-                short_max_reserved_usd / short_precision - float(
-                    reserved_short
-                )
-            )
+            short_liquidity = short_max_reserved_usd / short_precision - float(reserved_short)
 
             # If its a single side market need to calculate on token
             # amount rather than $ value
             if "2" in token_symbol:
                 short_pool_amount = short_pool_amount / 2
 
-                short_max_reserved_tokens = (
-                    short_pool_amount * short_reserve_factor
-                )
+                short_max_reserved_tokens = short_pool_amount * short_reserve_factor
 
-                short_max_reserved_usd = (
-                    short_max_reserved_tokens / short_precision * token_price
-                )
+                short_max_reserved_usd = short_max_reserved_tokens / short_precision * token_price
 
                 short_liquidity = short_max_reserved_usd - float(reserved_short)
 
-            self.log.info(
-                f"Available Short Liquidity: ${numerize.numerize(short_liquidity)}"
-            )
+            self.log.info(f"Available Short Liquidity: ${numerize.numerize(short_liquidity)}")
 
             self.output["long"][token_symbol] = long_liquidity
             self.output["short"][token_symbol] = short_liquidity
@@ -235,9 +180,7 @@ class GetAvailableLiquidity(GetData):
 
         return self.output
 
-    def get_max_reserved_usd(self, market: str, token: str, is_long: bool) -> (
-        tuple[Any, Any, Any]
-    ):
+    def get_max_reserved_usd(self, market: str, token: str, is_long: bool) -> tuple[Any, Any, Any]:
         """
         For a given market, long/short token and pool direction get the
         uncalled web3 functions to calculate pool size, pool reserve factor
@@ -270,38 +213,16 @@ class GetAvailableLiquidity(GetData):
         datastore = get_datastore_contract(self.config)
 
         # get hashed keys for datastore
-        pool_amount_hash_data = pool_amount_key(
-            market,
-            token
-        )
-        reserve_factor_hash_data = reserve_factor_key(
-            market,
-            is_long
-        )
-        open_interest_reserve_factor_hash_data = (
-            open_interest_reserve_factor_key(
-                market,
-                is_long
-            )
-        )
+        pool_amount_hash_data = pool_amount_key(market, token)
+        reserve_factor_hash_data = reserve_factor_key(market, is_long)
+        open_interest_reserve_factor_hash_data = open_interest_reserve_factor_key(market, is_long)
 
-        pool_amount = datastore.functions.getUint(
-            pool_amount_hash_data
-        )
-        reserve_factor = datastore.functions.getUint(
-            reserve_factor_hash_data
-        )
-        open_interest_reserve_factor = datastore.functions.getUint(
-            open_interest_reserve_factor_hash_data
-        )
+        pool_amount = datastore.functions.getUint(pool_amount_hash_data)
+        reserve_factor = datastore.functions.getUint(reserve_factor_hash_data)
+        open_interest_reserve_factor = datastore.functions.getUint(open_interest_reserve_factor_hash_data)
 
         return pool_amount, reserve_factor, open_interest_reserve_factor
 
 
 if __name__ == "__main__":
-    data = GetAvailableLiquidity(
-        chain="arbitrum",
-        use_local_datastore=False
-    ).get_data(
-        to_csv=False
-    )
+    data = GetAvailableLiquidity(chain="arbitrum", use_local_datastore=False).get_data(to_csv=False)

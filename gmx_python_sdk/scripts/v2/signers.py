@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+
 class Signer(ABC):
     """Abstract interface for transaction signing."""
 
@@ -35,9 +36,9 @@ class PrivateKeySigner(Signer):
     def send_transaction(self, unsigned_tx):
         signed_tx = self.sign_transaction(unsigned_tx)
         try:
-            txn = signed_tx.rawTransaction
-        except AttributeError:
             txn = signed_tx.raw_transaction
+        except AttributeError:
+            txn = signed_tx.rawTransaction
         return self.web3.eth.send_raw_transaction(txn)
 
 
@@ -81,12 +82,12 @@ class LocalAccountSigner(Signer):
     def send_transaction(self, unsigned_tx):
         signed_tx = self.sign_transaction(unsigned_tx)
         try:
-            txn = signed_tx.rawTransaction
-        except AttributeError:
             txn = signed_tx.raw_transaction
+        except AttributeError:
+            txn = signed_tx.rawTransaction
         return self.web3.eth.send_raw_transaction(txn)
 
-# Update the create_signer function to support LocalAccount
+
 def create_signer(web3_obj, private_key=None, account=None):
     """
     Factory function to create the appropriate signer based on provided credentials.

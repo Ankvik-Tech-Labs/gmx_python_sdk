@@ -1,11 +1,9 @@
 from web3 import Web3
 
-from .order import Order
 from ..gas_utils import get_gas_limits
 from ..get.get_oracle_prices import OraclePrices
-from ..gmx_utils import (
-    get_estimated_swap_output, contract_map, get_datastore_contract
-)
+from ..gmx_utils import contract_map, get_datastore_contract, get_estimated_swap_output
+from .order import Order
 
 
 class SwapOrder(Order):
@@ -15,9 +13,7 @@ class SwapOrder(Order):
     """
 
     def __init__(self, start_token: str, out_token: str, *args: list, **kwargs: dict) -> None:
-        super().__init__(
-            *args, **kwargs
-        )
+        super().__init__(*args, **kwargs)
         self.start_token = start_token
         self.out_token = out_token
 
@@ -25,7 +21,6 @@ class SwapOrder(Order):
         self.order_builder(is_swap=True)
 
     def determine_gas_limits(self):
-
         datastore = get_datastore_contract(self.config)
         self._gas_limits = get_gas_limits(datastore)
         self._gas_limits_order_type = self._gas_limits["swap_order"]
@@ -61,37 +56,32 @@ class SwapOrder(Order):
         # For every path we through we need to call this to get the expected
         # output after x number of swaps
         estimated_swap_output_parameters = {
-            "data_store_address": (
-                contract_map[self.config.chain]["datastore"]["contract_address"]
-            ),
+            "data_store_address": (contract_map[self.config.chain]["datastore"]["contract_address"]),
             "market_addresses": [
                 market["gmx_market_address"],
                 market["index_token_address"],
                 market["long_token_address"],
-                market["short_token_address"]
+                market["short_token_address"],
             ],
             "token_prices_tuple": [
                 [
                     int(prices[market["index_token_address"]]["maxPriceFull"]),
-                    int(prices[market["index_token_address"]]["minPriceFull"])
+                    int(prices[market["index_token_address"]]["minPriceFull"]),
                 ],
                 [
                     int(prices[market["long_token_address"]]["maxPriceFull"]),
-                    int(prices[market["long_token_address"]]["minPriceFull"])
+                    int(prices[market["long_token_address"]]["minPriceFull"]),
                 ],
                 [
                     int(prices[market["short_token_address"]]["maxPriceFull"]),
-                    int(prices[market["short_token_address"]]["minPriceFull"])
+                    int(prices[market["short_token_address"]]["minPriceFull"]),
                 ],
             ],
             "token_in": in_token,
             "token_amount_in": in_token_amount,
-            "ui_fee_receiver": "0x0000000000000000000000000000000000000000"
+            "ui_fee_receiver": "0x0000000000000000000000000000000000000000",
         }
 
-        estimated_swap_output = get_estimated_swap_output(
-            self.config,
-            estimated_swap_output_parameters
-        )
+        estimated_swap_output = get_estimated_swap_output(self.config, estimated_swap_output_parameters)
 
         return estimated_swap_output

@@ -1,9 +1,10 @@
 import time
+
 from numerize import numerize
 
+from ..gmx_utils import execute_threading
 from .get import GetData
 from .get_oracle_prices import OraclePrices
-from ..gmx_utils import execute_threading
 
 
 class OpenInterest(GetData):
@@ -20,9 +21,7 @@ class OpenInterest(GetData):
             dictionary of open interest data.
 
         """
-        oracle_prices_dict = OraclePrices(
-            self.config.chain
-        ).get_recent_prices()
+        oracle_prices_dict = OraclePrices(self.config.chain).get_recent_prices()
 
         long_oi_output_list = []
         short_oi_output_list = []
@@ -35,23 +34,17 @@ class OpenInterest(GetData):
             self._filter_swap_markets()
             self._get_token_addresses(market_key)
 
-            index_token_address = self.markets.get_index_token_address(
-                market_key
-            )
+            index_token_address = self.markets.get_index_token_address(market_key)
 
             market = [
                 market_key,
                 index_token_address,
                 self._long_token_address,
-                self._short_token_address
+                self._short_token_address,
             ]
 
-            min_price = int(
-                oracle_prices_dict[index_token_address]["minPriceFull"]
-            )
-            max_price = int(
-                oracle_prices_dict[index_token_address]["maxPriceFull"]
-            )
+            min_price = int(oracle_prices_dict[index_token_address]["minPriceFull"])
+            max_price = int(oracle_prices_dict[index_token_address]["maxPriceFull"])
             prices_list = [min_price, max_price]
 
             # If the market is a synthetic one we need to use the decimals
@@ -62,31 +55,17 @@ class OpenInterest(GetData):
                         market_key,
                     )
                 else:
-                    decimal_factor = self.markets.get_decimal_factor(
-                        market_key,
-                        long=True
-                    )
+                    decimal_factor = self.markets.get_decimal_factor(market_key, long=True)
             except KeyError:
-                decimal_factor = self.markets.get_decimal_factor(
-                    market_key,
-                    long=True
-                )
+                decimal_factor = self.markets.get_decimal_factor(market_key, long=True)
 
-            oracle_factor = (30 - decimal_factor)
+            oracle_factor = 30 - decimal_factor
             precision = 10 ** (decimal_factor + oracle_factor)
             long_precision_list = [*long_precision_list, precision]
 
-            long_oi_with_pnl, long_pnl = self._get_pnl(
-                market,
-                prices_list,
-                is_long=True
-            )
+            long_oi_with_pnl, long_pnl = self._get_pnl(market, prices_list, is_long=True)
 
-            short_oi_with_pnl, short_pnl = self._get_pnl(
-                market,
-                prices_list,
-                is_long=False
-            )
+            short_oi_with_pnl, short_pnl = self._get_pnl(market, prices_list, is_long=False)
 
             long_oi_output_list.append(long_oi_with_pnl)
             short_oi_output_list.append(short_oi_with_pnl)
@@ -110,25 +89,21 @@ class OpenInterest(GetData):
             short_oi,
             long_pnl,
             short_pnl,
-            long_precision
+            long_precision,
         ) in zip(
             mapper,
             long_oi_threaded_output,
             short_oi_threaded_output,
             long_pnl_threaded_output,
             short_pnl_threaded_output,
-            long_precision_list
+            long_precision_list,
         ):
-            precision = 10 ** 30
+            precision = 10**30
             long_value = (long_oi - long_pnl) / long_precision
             short_value = (short_oi - short_pnl) / precision
 
-            self.log.info(
-                f"{market_symbol} Long: ${numerize.numerize(long_value)}"
-            )
-            self.log.info(
-                f"{market_symbol} Short: ${numerize.numerize(short_value)}"
-            )
+            self.log.info(f"{market_symbol} Long: ${numerize.numerize(long_value)}")
+            self.log.info(f"{market_symbol} Short: ${numerize.numerize(short_value)}")
 
             self.output["long"][market_symbol] = long_value
             self.output["short"][market_symbol] = short_value

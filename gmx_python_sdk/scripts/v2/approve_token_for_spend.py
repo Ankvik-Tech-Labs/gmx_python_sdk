@@ -1,19 +1,17 @@
 import json
 import os
 
-
-from .gmx_utils import (
-    create_connection, base_dir, convert_to_checksum_address
-)
+from .gmx_utils import base_dir, convert_to_checksum_address, create_connection
 
 
 def check_if_approved(
-        config,
-        spender: str,
-        token_to_approve: str,
-        amount_of_tokens_to_spend: int,
-        max_fee_per_gas,
-        approve: bool):
+    config,
+    spender: str,
+    token_to_approve: str,
+    amount_of_tokens_to_spend: int,
+    max_fee_per_gas,
+    approve: bool,
+):
     """
     For a given chain, check if a given amount of tokens is approved for spend by a contract, and
     approve is passed as true
@@ -43,9 +41,7 @@ def check_if_approved(
     if token_to_approve == "0x47904963fc8b2340414262125aF798B9655E58Cd":
         token_to_approve = "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f"
 
-    spender_checksum_address = convert_to_checksum_address(
-        config, spender
-    )
+    spender_checksum_address = convert_to_checksum_address(config, spender)
 
     # Get the signer and its address
     signer = config.get_signer()
@@ -53,22 +49,16 @@ def check_if_approved(
 
     token_checksum_address = convert_to_checksum_address(config, token_to_approve)
 
-    token_contract_abi = json.load(open(os.path.join(
-        base_dir,
-        "gmx_python_sdk",
-        "contracts",
-        "token_approval.json"
-    )))
+    token_contract_abi = json.load(open(os.path.join(base_dir, "gmx_python_sdk", "contracts", "token_approval.json")))
 
-    token_contract_obj = connection.eth.contract(address=token_to_approve,
-                                                 abi=token_contract_abi)
+    token_contract_obj = connection.eth.contract(address=token_to_approve, abi=token_contract_abi)
 
     # TODO - for AVAX support this will need to incl WAVAX address
     if token_checksum_address == "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1":
         try:
-            balance_of = connection.eth.getBalance(user_checksum_address)
-        except AttributeError:
             balance_of = connection.eth.get_balance(user_checksum_address)
+        except AttributeError:
+            balance_of = connection.eth.getBalance(user_checksum_address)
 
     else:
         balance_of = token_contract_obj.functions.balanceOf(user_checksum_address).call()
@@ -77,38 +67,31 @@ def check_if_approved(
         msg = "Insufficient balance!"
         raise Exception(msg)
 
-    amount_approved = token_contract_obj.functions.allowance(
-        user_checksum_address,
-        spender_checksum_address
-    ).call()
+    amount_approved = token_contract_obj.functions.allowance(user_checksum_address, spender_checksum_address).call()
 
     if amount_approved < amount_of_tokens_to_spend and approve:
-
-
         nonce = connection.eth.get_transaction_count(user_checksum_address)
 
         arguments = spender_checksum_address, amount_of_tokens_to_spend
-        raw_txn = token_contract_obj.functions.approve(
-            *arguments
-        ).build_transaction({
-            "from": user_checksum_address,
-            "value": 0,
-            "chainId": config.chain_id,
-            "gas": 4000000,
-            "maxFeePerGas": int(max_fee_per_gas),
-            "maxPriorityFeePerGas": 0,
-            "nonce": nonce})
+        raw_txn = token_contract_obj.functions.approve(*arguments).build_transaction(
+            {
+                "from": user_checksum_address,
+                "value": 0,
+                "chainId": config.chain_id,
+                "gas": 4000000,
+                "maxFeePerGas": int(max_fee_per_gas),
+                "maxPriorityFeePerGas": 0,
+                "nonce": nonce,
+            }
+        )
 
         # Use signer to send the transaction
         signer.send_transaction(raw_txn)
-
 
     if amount_approved < amount_of_tokens_to_spend and not approve:
         msg = "Token not approved for spend, please allow first!"
         raise Exception(msg)
 
 
-
 if __name__ == "__main__":
-
     pass

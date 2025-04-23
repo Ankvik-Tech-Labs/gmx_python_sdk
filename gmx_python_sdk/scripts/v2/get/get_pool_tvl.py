@@ -1,20 +1,20 @@
 import numpy as np
 
+from ..gmx_utils import (
+    get_datastore_contract,
+    make_timestamped_dataframe,
+    save_csv_to_datastore,
+    save_json_file_to_datastore,
+)
+from ..keys import pool_amount_key
 from .get_markets import Markets
 from .get_oracle_prices import OraclePrices
-from ..keys import pool_amount_key
-from ..gmx_utils import (
-    get_datastore_contract, save_json_file_to_datastore,
-    make_timestamped_dataframe, save_csv_to_datastore
-)
 
 
 class GetPoolTVL:
     def __init__(self, config: str):
         self.config = config
-        self.oracle_prices_dict = OraclePrices(
-            chain=config.chain
-        ).get_recent_prices
+        self.oracle_prices_dict = OraclePrices(chain=config.chain).get_recent_prices
 
     def get_pool_balances(self, to_json: bool = False, to_csv: bool = False):
         """
@@ -35,22 +35,15 @@ class GetPoolTVL:
 
         """
         markets = Markets(self.config).get_available_markets()
-        pool_tvl_dict = {
-            "total_tvl": {},
-            "long_token": {},
-            "short_token": {}
-        }
+        pool_tvl_dict = {"total_tvl": {}, "long_token": {}, "short_token": {}}
 
         for market in markets:
-
             index_token_address = markets[market]["index_token_address"]
             long_token_metadata = markets[market]["long_token_metadata"]
             short_token_metadata = markets[market]["short_token_metadata"]
 
             long_token_balance, short_token_balance = self._query_balances(
-                market,
-                long_token_metadata,
-                short_token_metadata
+                market, long_token_metadata, short_token_metadata
             )
 
             long_precision = 10 ** long_token_metadata["decimals"]
@@ -66,50 +59,26 @@ class GetPoolTVL:
             # except KeyError:
             #     pass
 
-            oracle_precision = 10 ** (
-                30 - markets[market]["long_token_metadata"]["decimals"]
-            )
-            long_usd_balance = self._calculate_usd_value(
-                index_token_address,
-                long_token_balance,
-                oracle_precision
-            )
+            oracle_precision = 10 ** (30 - markets[market]["long_token_metadata"]["decimals"])
+            long_usd_balance = self._calculate_usd_value(index_token_address, long_token_balance, oracle_precision)
             short_usd_balance = short_token_balance
 
             dictionary_key = markets[market]["market_symbol"]
 
-            pool_tvl_dict["total_tvl"][dictionary_key] = (
-                long_usd_balance + short_usd_balance
-            )
-            pool_tvl_dict["long_token"][dictionary_key] = (
-                markets[market]["long_token_address"]
-            )
-            pool_tvl_dict["short_token"][dictionary_key] = (
-                markets[market]["short_token_address"]
-            )
-
+            pool_tvl_dict["total_tvl"][dictionary_key] = long_usd_balance + short_usd_balance
+            pool_tvl_dict["long_token"][dictionary_key] = markets[market]["long_token_address"]
+            pool_tvl_dict["short_token"][dictionary_key] = markets[market]["short_token_address"]
 
         if to_json:
-            save_json_file_to_datastore(
-                f"{self.config.chain}_pool_tvl.json",
-                pool_tvl_dict
-            )
+            save_json_file_to_datastore(f"{self.config.chain}_pool_tvl.json", pool_tvl_dict)
 
         if to_csv:
             dataframe = make_timestamped_dataframe(pool_tvl_dict["total_tvl"])
-            save_csv_to_datastore(
-                f"{self.config.chain}_total_tvl.csv",
-                dataframe
-            )
+            save_csv_to_datastore(f"{self.config.chain}_total_tvl.csv", dataframe)
         else:
             return pool_tvl_dict
 
-    def _query_balances(
-        self,
-        market: str,
-        long_token_metadata: dict,
-        short_token_metadata: dict
-    ):
+    def _query_balances(self, market: str, long_token_metadata: dict, short_token_metadata: dict):
         """
         For a given GMX market get the balance of long and short tokens from
         the datastore contract
@@ -131,22 +100,12 @@ class GetPoolTVL:
             amount of tokens.
         """
         datastore = get_datastore_contract(self.config)
-        pool_amount_hash_data = pool_amount_key(
-            market,
-            long_token_metadata["address"]
-        )
-        long_token_balance = datastore.functions.getUint(
-            pool_amount_hash_data
-        ).call()
+        pool_amount_hash_data = pool_amount_key(market, long_token_metadata["address"])
+        long_token_balance = datastore.functions.getUint(pool_amount_hash_data).call()
 
         datastore = get_datastore_contract(self.config)
-        pool_amount_hash_data = pool_amount_key(
-            market,
-            short_token_metadata["address"]
-        )
-        short_token_balance = datastore.functions.getUint(
-            pool_amount_hash_data
-        ).call()
+        pool_amount_hash_data = pool_amount_key(market, short_token_metadata["address"])
+        short_token_balance = datastore.functions.getUint(pool_amount_hash_data).call()
 
         return long_token_balance, short_token_balance
 
@@ -176,16 +135,8 @@ class GetPoolTVL:
         try:
             token_price = np.median(
                 [
-                    float(
-                        self.oracle_prices_dict()[
-                            token_address
-                        ]["maxPriceFull"]
-                    ) / oracle_precision,
-                    float(
-                        self.oracle_prices_dict()[
-                            token_address
-                        ]["minPriceFull"]
-                    ) / oracle_precision
+                    float(self.oracle_prices_dict()[token_address]["maxPriceFull"]) / oracle_precision,
+                    float(self.oracle_prices_dict()[token_address]["minPriceFull"]) / oracle_precision,
                 ]
             )
             return token_price * token_balance

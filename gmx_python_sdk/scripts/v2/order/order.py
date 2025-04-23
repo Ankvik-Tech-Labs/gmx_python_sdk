@@ -1,37 +1,49 @@
 import logging
-import numpy as np
+from typing import Optional
 
+import numpy as np
 from hexbytes import HexBytes
 from web3 import Web3
 
+from ..approve_token_for_spend import check_if_approved
+from ..gas_utils import get_execution_fee
 from ..get.get_markets import Markets
 from ..get.get_oracle_prices import OraclePrices
 from ..gmx_utils import (
-    get_exchange_router_contract, create_connection, contract_map,
-    PRECISION, get_execution_price_and_price_impact, order_type as order_types,
-    decrease_position_swap_type as decrease_position_swap_types,
-    convert_to_checksum_address, check_web3_correct_version
+    PRECISION,
+    check_web3_correct_version,
+    contract_map,
+    convert_to_checksum_address,
+    create_connection,
 )
-from ..gas_utils import get_execution_fee
-from ..approve_token_for_spend import check_if_approved
-from typing import Optional
+from ..gmx_utils import decrease_position_swap_type as decrease_position_swap_types
+from ..gmx_utils import get_exchange_router_contract, get_execution_price_and_price_impact
+from ..gmx_utils import order_type as order_types
 
 is_newer_version, version = check_web3_correct_version()
 if is_newer_version:
     logging.warning(
-        f"GMX Python SDK was developed with py web3 version 6.10.0. Current version of py web3 ({version}), may result in errors.")
+        f"GMX Python SDK was developed with py web3 version 6.10.0. Current version of py web3 ({version}), may result in errors."
+    )
 
 
 class Order:
-
     def __init__(
-        self, config: str, market_key: str, collateral_address: str,
-        index_token_address: str, is_long: bool, size_delta: float,
-        initial_collateral_delta_amount: str, slippage_percent: float,
-        swap_path: list, max_fee_per_gas: Optional[int] = None, auto_cancel: bool = False,
-        debug_mode: bool = False, execution_buffer: float = 1.3
+        self,
+        config: str,
+        market_key: str,
+        collateral_address: str,
+        index_token_address: str,
+        is_long: bool,
+        size_delta: float,
+        initial_collateral_delta_amount: str,
+        slippage_percent: float,
+        swap_path: list,
+        max_fee_per_gas: Optional[int] = None,
+        auto_cancel: bool = False,
+        debug_mode: bool = False,
+        execution_buffer: float = 1.3,
     ) -> None:
-
         self.config = config
         self.market_key = market_key
         self.collateral_address = collateral_address
@@ -50,14 +62,10 @@ class Order:
             logging.info(f"Execution buffer set to: {(self.execution_buffer - 1) * 100:.2f}%")
 
         if self.max_fee_per_gas is None:
-            block = create_connection(
-                config
-            ).eth.get_block("latest")
+            block = create_connection(config).eth.get_block("latest")
             self.max_fee_per_gas = block["baseFeePerGas"] * 1.35
 
-        self._exchange_router_contract_obj = get_exchange_router_contract(
-            config=self.config
-        )
+        self._exchange_router_contract_obj = get_exchange_router_contract(config=self.config)
         self._connection = create_connection(config)
         self._is_swap = False
 
@@ -73,16 +81,21 @@ class Order:
         """
         spender = contract_map[self.config.chain]["syntheticsrouter"]["contract_address"]
 
-        check_if_approved(self.config,
-                          spender,
-                          self.collateral_address,
-                          self.initial_collateral_delta_amount,
-                          self.max_fee_per_gas,
-                          approve=True)
+        check_if_approved(
+            self.config,
+            spender,
+            self.collateral_address,
+            self.initial_collateral_delta_amount,
+            self.max_fee_per_gas,
+            approve=True,
+        )
 
     def _submit_transaction(
-        self, user_wallet_address: str, value_amount: float,
-        multicall_args: list, gas_limits: dict
+        self,
+        user_wallet_address: str,
+        value_amount: float,
+        multicall_args: list,
+        gas_limits: dict,
     ):
         """
         Submit Transaction
@@ -117,23 +130,17 @@ class Order:
 
         # Ensure the signer address matches the wallet address
         if signer.get_address().lower() != wallet_address.lower():
-            self.log.warning(
-                f"Signer address {signer.get_address()} doesn't match wallet address {wallet_address}"
-            )
+            self.log.warning(f"Signer address {signer.get_address()} doesn't match wallet address {wallet_address}")
 
-        raw_txn = self._exchange_router_contract_obj.functions.multicall(
-            multicall_args
-        ).build_transaction(
+        raw_txn = self._exchange_router_contract_obj.functions.multicall(multicall_args).build_transaction(
             {
                 "from": signer.get_address(),
                 "value": value_amount,
                 "chainId": self.config.chain_id,
-                "gas": (
-                    self._gas_limits_order_type.call() + self._gas_limits_order_type.call()
-                ),
+                "gas": (self._gas_limits_order_type.call() + self._gas_limits_order_type.call()),
                 "maxFeePerGas": int(self.max_fee_per_gas),
                 "maxPriorityFeePerGas": 0,
-                "nonce": nonce
+                "nonce": nonce,
             }
         )
 
@@ -142,9 +149,7 @@ class Order:
             tx_hash = signer.send_transaction(raw_txn)
 
             self.log.info("Txn submitted!")
-            self.log.info(
-                f"Check status: https://arbiscan.io/tx/{tx_hash.hex()}"
-            )
+            self.log.info(f"Check status: https://arbiscan.io/tx/{tx_hash.hex()}")
 
             self.log.info("Transaction submitted!")
             return tx_hash
@@ -152,8 +157,12 @@ class Order:
         return None
 
     def _get_prices(
-        self, decimals: float, prices: float, is_open: bool = False,
-        is_close: bool = False, is_swap: bool = False
+        self,
+        decimals: float,
+        prices: float,
+        is_open: bool = False,
+        is_close: bool = False,
+        is_swap: bool = False,
     ):
         """
         Get Prices
@@ -162,7 +171,7 @@ class Order:
         price = np.median(
             [
                 float(prices[self.index_token_address]["maxPriceFull"]),
-                float(prices[self.index_token_address]["minPriceFull"])
+                float(prices[self.index_token_address]["minPriceFull"]),
             ]
         )
 
@@ -170,37 +179,23 @@ class Order:
         # slippage in a different way
         if is_open:
             if self.is_long:
-                slippage = str(
-                    int(float(price) + float(price) * self.slippage_percent)
-                )
+                slippage = str(int(float(price) + float(price) * self.slippage_percent))
             else:
-                slippage = str(
-                    int(float(price) - float(price) * self.slippage_percent)
-                )
+                slippage = str(int(float(price) - float(price) * self.slippage_percent))
         elif is_close:
             if self.is_long:
-                slippage = str(
-                    int(float(price) - float(price) * self.slippage_percent)
-                )
+                slippage = str(int(float(price) - float(price) * self.slippage_percent))
             else:
-                slippage = str(
-                    int(float(price) + float(price) * self.slippage_percent)
-                )
+                slippage = str(int(float(price) + float(price) * self.slippage_percent))
         else:
             slippage = 0
 
-        acceptable_price_in_usd = (
-            int(slippage) * 10 ** (decimals - PRECISION)
-        )
+        acceptable_price_in_usd = int(slippage) * 10 ** (decimals - PRECISION)
 
-        self.log.info(
-            f"Mark Price: ${price * 10 ** (decimals - PRECISION):.4f}"
-        )
+        self.log.info(f"Mark Price: ${price * 10 ** (decimals - PRECISION):.4f}")
 
         if acceptable_price_in_usd != 0:
-            self.log.info(
-                f"Acceptable price: ${acceptable_price_in_usd:.4f}"
-            )
+            self.log.info(f"Acceptable price: ${acceptable_price_in_usd:.4f}")
 
         return price, int(slippage), acceptable_price_in_usd
 
@@ -211,13 +206,7 @@ class Order:
 
         self.determine_gas_limits()
         gas_price = self._connection.eth.gas_price
-        execution_fee = int(
-            get_execution_fee(
-                self._gas_limits,
-                self._gas_limits_order_type,
-                gas_price
-            )
-        )
+        execution_fee = int(get_execution_fee(self._gas_limits, self._gas_limits_order_type, gas_price))
 
         # Dont need to check approval when closing
         if not is_close and not self.debug_mode:
@@ -249,7 +238,7 @@ class Order:
             estimated_output = self.estimated_swap_output(
                 markets[self.swap_path[0]],
                 self.collateral_address,
-                initial_collateral_delta_amount
+                initial_collateral_delta_amount,
             )
 
             # this var will help to calculate the cost gas depending on the
@@ -260,24 +249,20 @@ class Order:
                     markets[self.swap_path[1]],
                     "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
                     int(
-                        estimated_output[
-                            "out_token_amount"
-                        ] - estimated_output[
-                            "out_token_amount"
-                        ] * self.slippage_percent
-                    )
+                        estimated_output["out_token_amount"]
+                        - estimated_output["out_token_amount"] * self.slippage_percent
+                    ),
                 )
                 self._get_limits_order_type = self._gas_limits["swap_order"]
 
-            min_output_amount = estimated_output["out_token_amount"] - \
-                estimated_output["out_token_amount"] * self.slippage_percent
+            min_output_amount = (
+                estimated_output["out_token_amount"] - estimated_output["out_token_amount"] * self.slippage_percent
+            )
 
         decrease_position_swap_type = decrease_position_swap_types["no_swap"]
 
         should_unwrap_native_token = True
-        referral_code = HexBytes(
-            "0x0000000000000000000000000000000000000000000000000000000000000000"
-        )
+        referral_code = HexBytes("0x0000000000000000000000000000000000000000000000000000000000000000")
         user_wallet_address = self.config.user_wallet_address
         eth_zero_address = "0x0000000000000000000000000000000000000000"
         ui_ref_address = "0x0000000000000000000000000000000000000000"
@@ -288,27 +273,21 @@ class Order:
 
         # parameters using to calculate execution price
         execution_price_parameters = {
-            "data_store_address": (
-                contract_map[self.config.chain]["datastore"]["contract_address"]
-            ),
+            "data_store_address": (contract_map[self.config.chain]["datastore"]["contract_address"]),
             "market_key": self.market_key,
             "index_token_price": [
                 int(prices[self.index_token_address]["maxPriceFull"]),
-                int(prices[self.index_token_address]["minPriceFull"])
+                int(prices[self.index_token_address]["minPriceFull"]),
             ],
             "position_size_in_usd": 0,
             "position_size_in_tokens": 0,
             "size_delta": size_delta_price_price_impact,
-            "is_long": self.is_long
+            "is_long": self.is_long,
         }
         decimals = markets[self.market_key]["market_metadata"]["decimals"]
 
         price, acceptable_price, acceptable_price_in_usd = self._get_prices(
-            decimals,
-            prices,
-            is_open,
-            is_close,
-            is_swap
+            decimals, prices, is_open, is_close, is_swap
         )
 
         mark_price = 0
@@ -323,59 +302,37 @@ class Order:
             gmx_market_address = "0x0000000000000000000000000000000000000000"
 
         execution_price_and_price_impact_dict = get_execution_price_and_price_impact(
-            self.config,
-            execution_price_parameters,
-            decimals
+            self.config, execution_price_parameters, decimals
         )
-        self.log.info(
-            "Execution price: ${:.4f}".format(
-                execution_price_and_price_impact_dict["execution_price"]
-            )
-        )
+        self.log.info("Execution price: ${:.4f}".format(execution_price_and_price_impact_dict["execution_price"]))
 
         # Prevent txn from being submitted if execution price falls outside acceptable
         if is_open:
             if self.is_long:
-                if execution_price_and_price_impact_dict[
-                        "execution_price"] > acceptable_price_in_usd:
+                if execution_price_and_price_impact_dict["execution_price"] > acceptable_price_in_usd:
                     msg = "Execution price falls outside acceptable price!"
                     raise Exception(msg)
             elif not self.is_long:
-                if execution_price_and_price_impact_dict[
-                        "execution_price"] < acceptable_price_in_usd:
+                if execution_price_and_price_impact_dict["execution_price"] < acceptable_price_in_usd:
                     msg = "Execution price falls outside acceptable price!"
                     raise Exception(msg)
         elif is_close:
             if self.is_long:
-                if execution_price_and_price_impact_dict[
-                        "execution_price"] < acceptable_price_in_usd:
+                if execution_price_and_price_impact_dict["execution_price"] < acceptable_price_in_usd:
                     msg = "Execution price falls outside acceptable price!"
                     raise Exception(msg)
             elif not self.is_long:
-                if execution_price_and_price_impact_dict[
-                        "execution_price"] > acceptable_price_in_usd:
+                if execution_price_and_price_impact_dict["execution_price"] > acceptable_price_in_usd:
                     msg = "Execution price falls outside acceptable price!"
                     raise Exception(msg)
 
-        user_wallet_address = convert_to_checksum_address(
-            self.config,
-            user_wallet_address
-        )
+        user_wallet_address = convert_to_checksum_address(self.config, user_wallet_address)
 
         cancellation_receiver = user_wallet_address
 
-        eth_zero_address = convert_to_checksum_address(
-            self.config,
-            eth_zero_address
-        )
-        ui_ref_address = convert_to_checksum_address(
-            self.config,
-            ui_ref_address
-        )
-        collateral_address = convert_to_checksum_address(
-            self.config,
-            self.collateral_address
-        )
+        eth_zero_address = convert_to_checksum_address(self.config, eth_zero_address)
+        ui_ref_address = convert_to_checksum_address(self.config, ui_ref_address)
+        collateral_address = convert_to_checksum_address(self.config, self.collateral_address)
 
         auto_cancel = self.auto_cancel
 
@@ -387,7 +344,7 @@ class Order:
                 ui_ref_address,
                 gmx_market_address,
                 collateral_address,
-                self.swap_path
+                self.swap_path,
             ),
             (
                 self.size_delta,
@@ -397,14 +354,14 @@ class Order:
                 execution_fee,
                 callback_gas_limit,
                 int(min_output_amount),
-                0
+                0,
             ),
             order_type,
             decrease_position_swap_type,
             self.is_long,
             should_unwrap_native_token,
             auto_cancel,
-            referral_code
+            referral_code,
         )
 
         # If the collateral is not native token (ie ETH/Arbitrum or AVAX/AVAX)
@@ -412,46 +369,36 @@ class Order:
 
         value_amount = execution_fee
         if self.collateral_address != "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1" and not is_close:
-
             multicall_args = [
                 HexBytes(self._send_wnt(value_amount)),
-                HexBytes(
-                    self._send_tokens(
-                        self.collateral_address,
-                        initial_collateral_delta_amount
-                    )
-                ),
-                HexBytes(self._create_order(arguments))
+                HexBytes(self._send_tokens(self.collateral_address, initial_collateral_delta_amount)),
+                HexBytes(self._create_order(arguments)),
             ]
 
         else:
-
             # send start token and execute fee if token is ETH or AVAX
             if is_open or is_swap:
-
                 value_amount = initial_collateral_delta_amount + execution_fee
 
             multicall_args = [
                 HexBytes(self._send_wnt(value_amount)),
-                HexBytes(self._create_order(arguments))
+                HexBytes(self._create_order(arguments)),
             ]
 
-        self._submit_transaction(
-            user_wallet_address, value_amount, multicall_args, self._gas_limits
-        )
+        self._submit_transaction(user_wallet_address, value_amount, multicall_args, self._gas_limits)
 
     def _create_order(self, arguments):
         """
         Create Order
         """
         try:
-            return self._exchange_router_contract_obj.encodeABI(
-                fn_name="createOrder",
+            return self._exchange_router_contract_obj.encode_abi(
+                abi_element_identifier="createOrder",
                 args=[arguments],
             )
         except AttributeError:
-            return self._exchange_router_contract_obj.encode_abi(
-                abi_element_identifier="createOrder",
+            return self._exchange_router_contract_obj.encodeABI(
+                fn_name="createOrder",
                 args=[arguments],
             )
 
@@ -460,21 +407,21 @@ class Order:
         Send tokens
         """
         try:
-            return self._exchange_router_contract_obj.encodeABI(
-                fn_name="sendTokens",
-                args=(
-                    self.collateral_address,
-                    "0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5",
-                    amount
-                ),
-            )
-        except AttributeError:
             return self._exchange_router_contract_obj.encode_abi(
                 abi_element_identifier="sendTokens",
                 args=(
                     self.collateral_address,
                     "0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5",
-                    amount
+                    amount,
+                ),
+            )
+        except AttributeError:
+            return self._exchange_router_contract_obj.encodeABI(
+                fn_name="sendTokens",
+                args=(
+                    self.collateral_address,
+                    "0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5",
+                    amount,
                 ),
             )
 
@@ -485,16 +432,10 @@ class Order:
         try:
             return self._exchange_router_contract_obj.encodeABI(
                 fn_name="sendWnt",
-                args=(
-                    "0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5",
-                    amount
-                )
+                args=("0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5", amount),
             )
         except AttributeError:
             return self._exchange_router_contract_obj.encode_abi(
                 abi_element_identifier="sendWnt",
-                args=(
-                    "0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5",
-                    amount
-                )
+                args=("0x31eF83a530Fde1B38EE9A18093A333D8Bbbc40D5", amount),
             )
