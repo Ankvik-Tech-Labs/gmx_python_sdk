@@ -18,7 +18,7 @@ class SwapOrder(Order):
         self.out_token = out_token
 
         # Open an order
-        self.order_builder(is_swap=True)
+        self.tx_info = self.order_builder(is_swap=True)
 
     def determine_gas_limits(self):
         datastore = get_datastore_contract(self.config)

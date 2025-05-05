@@ -385,7 +385,7 @@ class Order:
                 HexBytes(self._create_order(arguments)),
             ]
 
-        self._submit_transaction(user_wallet_address, value_amount, multicall_args, self._gas_limits)
+        return self._submit_transaction(user_wallet_address, value_amount, multicall_args, self._gas_limits)
 
     def _create_order(self, arguments):
         """

@@ -1,26 +1,29 @@
+import hashlib
+
+from hexbytes import HexBytes
 from utils import _set_paths
 from web3 import Web3
-import hashlib
-from hexbytes import HexBytes
 
 _set_paths()
 
+from decimal import Decimal
+
 from get_positions import get_positions
 
+from gmx_python_sdk.scripts.v2.get.get import GetData
 from gmx_python_sdk.scripts.v2.get.get_markets import Markets
 from gmx_python_sdk.scripts.v2.gmx_utils import (
-    ConfigManager, get_reader_contract, get_datastore_contract,
-    get_tokens_address_dict)
-
+    ConfigManager,
+    get_datastore_contract,
+    get_reader_contract,
+    get_tokens_address_dict,
+)
 from gmx_python_sdk.scripts.v2.keys import (
-    min_collateral, accountPositionListKey,
+    accountPositionListKey,
     max_position_impact_factor_for_liquidations_key,
-    min_collateral_factor_key)
-
-
-from gmx_python_sdk.scripts.v2.get.get import GetData
-
-from decimal import Decimal
+    min_collateral,
+    min_collateral_factor_key,
+)
 
 # TODO - KNOWN ISSUES
 # - Single Side Pools not working
@@ -41,9 +44,8 @@ def calculate_liquidation_price(
     min_collateral_usd: Decimal,
     is_long: bool,
     use_max_price_impact: bool = False,
-    user_referral_info: dict = None
+    user_referral_info: dict = None,
 ) -> Decimal:
-
     print(f"collateral amount: {collateral_amount}")
     print(f"size in tokens: {size_in_tokens}")
     print(f"Funding Fees: {pending_funding_fees_usd}")
@@ -54,12 +56,9 @@ def calculate_liquidation_price(
 
     index_token = index_token_address
 
-    closing_fee_usd = get_position_fee(size_in_usd,
-                                       True,
-                                       user_referral_info)['positionFeeUsd']
+    closing_fee_usd = get_position_fee(size_in_usd, True, user_referral_info)["positionFeeUsd"]
 
-    total_pending_fees_usd = get_position_pending_fees_usd(
-        pending_funding_fees_usd, pending_borrowing_fees_usd)
+    total_pending_fees_usd = get_position_pending_fees_usd(pending_funding_fees_usd, pending_borrowing_fees_usd)
 
     total_fees_usd = total_pending_fees_usd + closing_fee_usd
 
@@ -85,12 +84,9 @@ def calculate_liquidation_price(
     #     if price_impact_delta_usd > 0:
     #         price_impact_delta_usd = Decimal(0)
 
-    minCollateralFactor = datastore_obj.functions.getUint(
-        min_collateral_factor_key(market_address)
-    ).call()
+    minCollateralFactor = datastore_obj.functions.getUint(min_collateral_factor_key(market_address)).call()
 
-    liquidation_collateral_usd = apply_factor(
-        size_in_usd, minCollateralFactor)
+    liquidation_collateral_usd = apply_factor(size_in_usd, minCollateralFactor)
 
     print(f"Liq Collat: {liquidation_collateral_usd}")
 
@@ -107,9 +103,8 @@ def calculate_liquidation_price(
                 return None
 
             liquidation_price = (
-                (size_in_usd + liquidation_collateral_usd -
-                 price_impact_delta_usd + total_fees_usd) / denominator
-            )
+                size_in_usd + liquidation_collateral_usd - price_impact_delta_usd + total_fees_usd
+            ) / denominator
             # TODO - add back in ) * 10**22
         else:
             denominator = size_in_tokens - collateral_amount
@@ -118,9 +113,8 @@ def calculate_liquidation_price(
                 return None
 
             liquidation_price = (
-                (size_in_usd - liquidation_collateral_usd +
-                 price_impact_delta_usd - total_fees_usd) / denominator
-            )
+                size_in_usd - liquidation_collateral_usd + price_impact_delta_usd - total_fees_usd
+            ) / denominator
             # TODO - add back in ) * 10**22
     else:
         if size_in_tokens == 0:
@@ -131,21 +125,14 @@ def calculate_liquidation_price(
         print(f"Closing Fee: {closing_fee_usd}")
         print(f"Collat USD: {collateral_usd}")
 
-        remaining_collateral_usd = (collateral_usd + price_impact_delta_usd -
-                                    total_pending_fees_usd - closing_fee_usd)
+        remaining_collateral_usd = collateral_usd + price_impact_delta_usd - total_pending_fees_usd - closing_fee_usd
 
         print(f"Remaining Colat: {remaining_collateral_usd}")
         if is_long:
-            liquidation_price = (
-                (liquidation_collateral_usd -
-                 remaining_collateral_usd + size_in_usd) / size_in_tokens
-            )
+            liquidation_price = (liquidation_collateral_usd - remaining_collateral_usd + size_in_usd) / size_in_tokens
             # TODO - add back in ) * 10**22
         else:
-            liquidation_price = (
-                (liquidation_collateral_usd - remaining_collateral_usd -
-                 size_in_usd) / - size_in_tokens
-            )
+            liquidation_price = (liquidation_collateral_usd - remaining_collateral_usd - size_in_usd) / -size_in_tokens
             # TODO - add back in ) * 10**22
 
     if liquidation_price <= 0:
@@ -158,16 +145,14 @@ def get_position_fee(
     size_delta_usd: Decimal,
     for_positive_impact: bool,
     referral_info: dict = None,
-    ui_fee_factor: Decimal = Decimal(0)
+    ui_fee_factor: Decimal = Decimal(0),
 ) -> dict:
-
     factor = 0.0005 if for_positive_impact else 0.0007
 
-    position_fee_usd = apply_factor(size_delta_usd,
-                                    factor)
+    position_fee_usd = apply_factor(size_delta_usd, factor)
 
     return {
-        'positionFeeUsd': position_fee_usd,
+        "positionFeeUsd": position_fee_usd,
     }
 
 
@@ -181,7 +166,7 @@ def apply_factor(value, factor):
 
 def get_price_impact_for_position(market_info, size_in_usd, is_long, fallback_to_zero):
     # Placeholder for the actual implementation
-    return Decimal('0')
+    return Decimal("0")
 
 
 def get_is_equivalent_tokens(token1, token2):
@@ -208,7 +193,14 @@ def transform_to_dict(account_positions_list):
     result = []
     for pos in account_positions_list:
         # Unpack the components of each position
-        position, referral, fees, base_pnl_usd, uncapped_base_pnl_usd, pnl_after_price_impact_usd = pos
+        (
+            position,
+            referral,
+            fees,
+            base_pnl_usd,
+            uncapped_base_pnl_usd,
+            pnl_after_price_impact_usd,
+        ) = pos
 
         position_dict = {
             "position": {
@@ -286,30 +278,26 @@ def transform_to_dict(account_positions_list):
 
 
 def find_position(market_address, account_position):
-    print(market_address, account_position['position']['addresses']['market'])
-    if market_address == account_position['position']['addresses']['market']:
+    print(market_address, account_position["position"]["addresses"]["market"])
+    if market_address == account_position["position"]["addresses"]["market"]:
         return True
     else:
         return False
 
 
 def get_liquidation_price(config, position_dict, wallet_address=None):
-
     referral_storage = "0xe6fab3F0c7199b0d34d7FbE83394fc0e0D06e99d"
     datastore = "0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8"
 
     market_address = position_dict["market"]
 
-    data_obj = GetData(config=config, use_local_datastore=False,
-                       filter_swap_markets=True)
+    data_obj = GetData(config=config, use_local_datastore=False, filter_swap_markets=True)
     data_obj._get_token_addresses(market_address)
     market_info = data_obj.markets.get_available_markets()[market_address]
 
     index_token_address = market_info["index_token_address"]
 
-    output = [data_obj._get_oracle_prices(market_address,
-                                          index_token_address,
-                                          return_tuple=True)]
+    output = [data_obj._get_oracle_prices(market_address, index_token_address, return_tuple=True)]
 
     hex_data = accountPositionListKey(wallet_address)
     reader_obj = get_reader_contract(config)
@@ -321,7 +309,8 @@ def get_liquidation_price(config, position_dict, wallet_address=None):
         print(i)
         # get account positions using positions key built with info above
         account_positions_list_raw = reader_obj.functions.getAccountPositionInfoList(
-            datastore, referral_storage, [i], output, wallet_address).call()
+            datastore, referral_storage, [i], output, wallet_address
+        ).call()
         account_positions_list = transform_to_dict(account_positions_list_raw)
 
         account_positions_list_filter += account_positions_list
@@ -331,7 +320,8 @@ def get_liquidation_price(config, position_dict, wallet_address=None):
             break
 
     decimals = tokens = get_tokens_address_dict(config.chain)[
-        account_position['position']['addresses']['collateralToken']]['decimals']
+        account_position["position"]["addresses"]["collateralToken"]
+    ]["decimals"]
 
     print(f"funding fee amount: {int(account_position['fees']['fundingFeeAmount'])}")
 
@@ -339,30 +329,28 @@ def get_liquidation_price(config, position_dict, wallet_address=None):
         datastore_obj=datastore_obj,
         market_address=market_address,
         index_token_address=index_token_address,
-        size_in_usd=account_position['position']['numbers']['sizeInUsd'],
-        size_in_tokens=account_position['position']['numbers']['sizeInTokens'],
-        collateral_amount=account_position['position']['numbers']['collateralAmount'],
-        collateral_usd=position_dict['inital_collateral_amount_usd'][0] * 10**30,
-        collateral_token=account_position['position']['addresses']['collateralToken'],
-        pending_funding_fees_usd=int(
-            (account_position['fees']['fundingFeeAmount'] * 10**-decimals) * 10**30),
-        pending_borrowing_fees_usd=account_position['borrowing']['borrowingFeeUsd'],
+        size_in_usd=account_position["position"]["numbers"]["sizeInUsd"],
+        size_in_tokens=account_position["position"]["numbers"]["sizeInTokens"],
+        collateral_amount=account_position["position"]["numbers"]["collateralAmount"],
+        collateral_usd=position_dict["inital_collateral_amount_usd"][0] * 10**30,
+        collateral_token=account_position["position"]["addresses"]["collateralToken"],
+        pending_funding_fees_usd=int((account_position["fees"]["fundingFeeAmount"] * 10**-decimals) * 10**30),
+        pending_borrowing_fees_usd=account_position["borrowing"]["borrowingFeeUsd"],
         min_collateral_usd=datastore_obj.functions.getUint(min_collateral()).call(),
         is_long=position_dict["is_long"],
         use_max_price_impact=True,
-        user_referral_info=None)
+        user_referral_info=None,
+    )
 
-    decimals = market_info["market_metadata"]['decimals']
+    decimals = market_info["market_metadata"]["decimals"]
 
-    return liquidation_price / 10**(30 - decimals)
+    return liquidation_price / 10 ** (30 - decimals)
 
 
 if __name__ == "__main__":
-
     wallet_address = "0xaB4A1001154220e942813763dF8D5ce0d8ea42d9"
-    config = ConfigManager(chain='arbitrum')
+    config = ConfigManager(chain="arbitrum")
     config.set_config()
     positions = get_positions(config, address=wallet_address)
 
-    liquidation_price = get_liquidation_price(
-        config, positions['GMX_long'], wallet_address)
+    liquidation_price = get_liquidation_price(config, positions["GMX_long"], wallet_address)

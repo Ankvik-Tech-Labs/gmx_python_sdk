@@ -84,7 +84,6 @@ def check_if_approved(
                 "nonce": nonce,
             }
         )
-
         # Use signer to send the transaction
         signer.send_transaction(raw_txn)
 

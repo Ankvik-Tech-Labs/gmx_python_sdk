@@ -46,7 +46,7 @@ contract_map = {
             "abi_path": "contracts/arbitrum/eventemitter.json",
         },
         "exchangerouter": {
-            "contract_address": "0x900173A66dbD345006C51fA35fA3aB760FcD843b",
+            "contract_address": "0x602b805EedddBbD9ddff44A7dcBD46cb07849685",
             "abi_path": "contracts/arbitrum/exchangerouter.json",
         },
         "depositvault": {
@@ -72,6 +72,22 @@ contract_map = {
         "glvreader": {
             "contract_address": "0xd4f522c4339Ae0A90a156bd716715547e44Bed65",
             "abi_path": "contracts/arbitrum/glvreader.json",
+        },
+        "chainlinkpricefeedprovider": {
+            "contract_address": "0x527FB0bCfF63C47761039bB386cFE181A92a4701",
+            "abi_path": "contracts/arbitrum/chainlinkpricefeedprovider.json",
+        },
+        "chainlinkdatastreamprovider": {
+            "contract_address": "0xF4122dF7Be4Ccd46D7397dAf2387B3A14e53d967",
+            "abi_path": "contracts/arbitrum/chainlinkdatastreamprovider.json",
+        },
+        "gmoracleprovider": {
+            "contract_address": "0x5d6B84086DA6d4B0b6C0dF7E02f8a6A039226530",
+            "abi_path": "contracts/arbitrum/gmoracleprovider.json",
+        },
+        "orderhandler": {
+            "contract_address": "0xfc9Bc118fdDb89FF6fF720840446D73478dE4153",
+            "abi_path": "contracts/arbitrum/orderhandler.json",
         },
     },
     "avalanche": {
