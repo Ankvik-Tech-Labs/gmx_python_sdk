@@ -1,9 +1,10 @@
 # hash.py - Ethereum hashing utilities
 
 from web3 import Web3
-from eth_utils.encoding import to_hex
+from eth_utils import to_hex, keccak
 from hexbytes import HexBytes
 from typing import Any, Union
+from eth_abi import encode
 
 # Initialize Web3 instance
 w3 = Web3()
@@ -54,7 +55,8 @@ def hash_data(data_types: list[str], data_values: list[Any]) -> HexBytes:
     Returns:
         keccak256 hash of encoded data
     """
-    return w3.solidity_keccak(data_types, data_values)
+    encoded = encode(data_types, data_values)
+    return keccak(encoded)
 
 
 def hash_string(string: str) -> HexBytes:

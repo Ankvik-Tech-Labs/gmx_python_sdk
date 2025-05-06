@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-import web3
+from eth_utils import to_checksum_address
 
 from gmx_python_sdk.scripts.v2.gmx_utils import get_contract_object
 from gmx_python_sdk.scripts.v2.utils.oracle import (
@@ -27,14 +27,14 @@ def get_execute_params(fixture, params: dict[str, Any]) -> dict[str, list]:
     prices = params.get("prices", [])
 
     # Get contract references from fixture
-    contracts = fixture.contracts
+    contracts = fixture.get("contracts")
     wnt = contracts.get("wnt")
     wbtc = contracts.get("wbtc")
     usdc = contracts.get("usdc")
     usdt = contracts.get("usdt")
 
     # Default price info for common tokens
-    ref_prices = fixture.prices
+    ref_prices = fixture.get("prices")
     default_price_info_items = {
         wnt.address: ref_prices.get("wnt"),
         wbtc.address: ref_prices.get("wbtc"),
@@ -75,7 +75,7 @@ def get_execute_params(fixture, params: dict[str, Any]) -> dict[str, list]:
     return result_params
 
 
-def execute_with_oracle_params(fixture, overrides: dict[str, Any]):
+def execute_with_oracle_params(fixture, overrides: dict, config) -> Any:
     """
     Execute a transaction with oracle parameters
 
@@ -94,6 +94,7 @@ def execute_with_oracle_params(fixture, overrides: dict[str, Any]):
     precisions = overrides.get("precisions", [])
     min_prices = overrides.get("minPrices", [])
     max_prices = overrides.get("maxPrices", [])
+
     execute = overrides.get("execute")
     simulate_execute = overrides.get("simulateExecute")
     simulate = overrides.get("simulate", False)
@@ -102,12 +103,20 @@ def execute_with_oracle_params(fixture, overrides: dict[str, Any]):
     data_stream_data = overrides.get("dataStreamData", [])
     price_feed_tokens = overrides.get("priceFeedTokens", [])
 
-    # Get Web3 provider and account references
-    web3_provider = fixture.web3_provider
-    chain = fixture.chain
-    signer = fixture.accounts.get("signer", [])
-    oracle_salt = fixture.props.get("oracleSalt")
-    signer_indexes = fixture.props.get("signerIndexes", [])
+    # Get Web3 provider and account references - safely handle nested dictionaries
+    web3_provider = fixture.get("web3_provider") or fixture.get("web3Provider")
+    chain = fixture.get("chain")
+
+    # Safely handle nested dictionaries
+    accounts = fixture.get("accounts", {})
+    props = fixture.get("props", {})
+
+    # Get signer - handle both single signer and list of signers
+    signer = accounts.get("signers")
+    signers = [signer] if signer and not isinstance(signer, list) else signer or []
+
+    oracle_salt = props.get("oracleSalt")
+    signer_indexes = props.get("signerIndexes", [])
 
     # Validate inputs
     if len(tokens) > len(precisions) or len(tokens) > len(min_prices) or len(tokens) > len(max_prices):
@@ -115,18 +124,26 @@ def execute_with_oracle_params(fixture, overrides: dict[str, Any]):
         raise ValueError(msg)
 
     if simulate and not simulate_execute:
-        raise ValueError("`simulateExecute` is required if `simulate` is true")
+        msg = "`simulateExecute` is required if `simulate` is true"
+        raise ValueError(msg)
 
     if not oracle_block_number:
-        raise ValueError("`oracleBlockNumber` is required")
+        msg = "`oracleBlockNumber` is required"
+        raise ValueError(msg)
+
+    if not web3_provider:
+        msg = "web3_provider is required in the fixture"
+        raise ValueError(msg)
 
     # Get blockchain block information
     block = web3_provider.eth.get_block(int(oracle_block_number))
+    print(f"Block number: {block.number}")
 
     # Default to standard oracle types if not provided
     token_oracle_types = overrides.get("tokenOracleTypes", [TOKEN_ORACLE_TYPES["DEFAULT"]] * len(tokens))
 
     # Initialize oracle block information
+    # FIX: Create empty lists first, then populate them
     min_oracle_block_numbers = []
     max_oracle_block_numbers = []
     oracle_timestamps = []
@@ -140,14 +157,29 @@ def execute_with_oracle_params(fixture, overrides: dict[str, Any]):
             oracle_timestamps.append(oracle_block["timestamp"])
             block_hashes.append(oracle_block["hash"])
     else:
-        # Use provided values or defaults based on the current block
-        min_oracle_block_numbers = overrides.get("minOracleBlockNumbers", [block.number] * len(tokens))
-        max_oracle_block_numbers = overrides.get("maxOracleBlockNumbers", [block.number] * len(tokens))
-        oracle_timestamps = overrides.get("oracleTimestamps", [block.timestamp] * len(tokens))
-        block_hashes = [block.hash.hex() if isinstance(block.hash, bytes) else block.hash] * len(tokens)
+        # FIX: Directly set the values instead of using get() with defaults
+        # This ensures the lists are properly populated
+        min_oracle_block_numbers = overrides.get("minOracleBlockNumbers")
+        if not min_oracle_block_numbers:
+            min_oracle_block_numbers = [block.number] * len(tokens)
 
-    # Prepare arguments for oracle parameters
+        max_oracle_block_numbers = overrides.get("maxOracleBlockNumbers")
+        if not max_oracle_block_numbers:
+            max_oracle_block_numbers = [block.number] * len(tokens)
+
+        oracle_timestamps_from_overrides = overrides.get("oracleTimestamps")
+        if not oracle_timestamps_from_overrides:
+            oracle_timestamps = [block.timestamp] * len(tokens)
+        else:
+            oracle_timestamps = oracle_timestamps_from_overrides
+
+        # Handle block hash depending on its format
+        block_hash = block.hash.hex() if isinstance(block.hash, bytes) else block.hash
+        block_hashes = [bytes.fromhex(block_hash)] * len(tokens)
+
+    # Prepare arguments for oracle parameters - no conditional checks needed now
     args = {
+        # skip the 0x prefix
         "oracle_salt": oracle_salt,
         "min_oracle_block_numbers": min_oracle_block_numbers,
         "max_oracle_block_numbers": max_oracle_block_numbers,
@@ -159,11 +191,17 @@ def execute_with_oracle_params(fixture, overrides: dict[str, Any]):
         "precisions": precisions,
         "min_prices": min_prices,
         "max_prices": max_prices,
-        "signer": signer,
+        "signers": signers,
         "data_stream_tokens": data_stream_tokens,
         "data_stream_data": data_stream_data,
         "price_feed_tokens": price_feed_tokens,
     }
+
+    config = fixture.get("config")
+    if not config:
+        msg = "config is required in the fixture"
+        raise ValueError(msg)
+
     order_handler = get_contract_object(web3_provider, "orderhandler", chain)
 
     # Get oracle parameters for simulation or execution
@@ -184,26 +222,34 @@ def execute_with_oracle_params(fixture, overrides: dict[str, Any]):
             logging.info("Oracle simulation completed")
     else:
         # Get full oracle parameters for execution
-        oracle_params = get_oracle_params(config=fixture.config, **args)
+        print(f"Args for oracle params: {args}")
+        oracle_params = get_oracle_params(config=config, **args)
 
         logging.info(f"Key: {key}")
         logging.info(f"Oracle Params: {oracle_params}")
 
-        nonce = web3.eth.get_transaction_count(signer.get_address())
+        # Get the first signer if available
+        if not signers:
+            msg = "At least one signer is required for transaction execution"
+            raise ValueError(msg)
+
+        active_signer = signers[0]
+        nonce = web3_provider.eth.get_transaction_count(active_signer.get_address())
+
         # Build the transaction
         transaction = order_handler.functions.executeOrder(key, oracle_params).build_transaction(
             {
-                "from": signer.get_address(),
+                "from": to_checksum_address(active_signer.get_address()),
                 "nonce": nonce,
                 "gas": 3000000,  # Set appropriate gas limit
-                "maxFeePerGas": web3.eth.gas_price * 2,  # Adjust as needed
-                "maxPriorityFeePerGas": web3.eth.gas_price // 10,  # Adjust as needed
+                "maxFeePerGas": web3_provider.eth.gas_price * 2,  # Adjust as needed
+                "maxPriorityFeePerGas": web3_provider.eth.gas_price // 10,  # Adjust as needed
             }
         )
-
+        # owner of order_handler 0xE7BfFf2aB721264887230037940490351700a068
         # Sign and send the transaction
-        signed_tx = signer.sign_transaction(transaction)
-        tx_hash = web3.eth.send_raw_transaction(signed_tx.rawTransaction)
+        signed_tx = active_signer.sign_transaction(transaction)
+        tx_hash = web3_provider.eth.send_raw_transaction(signed_tx.raw_transaction)
 
         # A Python equivalent of logGasUsage function
         if gas_usage_label:

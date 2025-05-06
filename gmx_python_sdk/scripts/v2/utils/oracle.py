@@ -3,8 +3,8 @@ from typing import Any, Union, Optional
 from web3 import Web3
 
 from gmx_python_sdk.scripts.v2.gmx_utils import create_connection, get_contract_object, get_datastore_contract
+from gmx_python_sdk.scripts.v2.utils import keys
 from gmx_python_sdk.scripts.v2.utils.hash_utils import hash_string, hash_data
-import keys
 from gmx_python_sdk.scripts.v2.utils.math import expand_decimals, MAX_UINT8, MAX_UINT32, MAX_UINT64
 
 # Constants
@@ -29,7 +29,7 @@ def sign_price(
     precision: Union[int, str],
     min_price: Union[int, str],
     max_price: Union[int, str],
-) -> str:
+) -> bytes:
     """
     Sign price data for oracle validation
 
@@ -88,7 +88,7 @@ def sign_price(
     message_hash = w3.to_bytes(hexstr=hash_result.hex())
 
     # Sign the message
-    return signer.sign_message(message_hash)
+    return bytes.fromhex(signer.sign_message(message_hash).signature.hex())
 
 
 def sign_prices(
@@ -381,9 +381,6 @@ def get_oracle_params(
     # Get signer info
     signer_info = get_signer_info(signer_indexes)
 
-    # Create web3 connection from config
-    web3_conn = create_connection(config)
-
     data_store = get_datastore_contract(config)
 
     # Get oracle provider contracts
@@ -431,7 +428,7 @@ def get_oracle_params(
         # Encode the data using the web3 connection from the SDK
         data_tuple = [
             token,
-            signer_info,
+            int(signer_info),
             precision,
             min_oracle_block_number,
             max_oracle_block_number,
@@ -445,7 +442,7 @@ def get_oracle_params(
         # Use the appropriate encoding method for the web3.py version
         try:
             # For newer web3.py versions
-            data = web3_conn.eth.codec.encode_abi(
+            data = web3_obj.eth.codec.encode_abi(
                 ["(address,uint256,uint256,uint256,uint256,uint256,bytes32,uint256[],uint256[],bytes[])"], [data_tuple]
             ).hex()
         except AttributeError:
@@ -469,7 +466,7 @@ def get_oracle_params(
         # Set the oracle provider for token using the SDK's pattern
         data_store.functions.setAddress(
             keys.oracle_provider_for_token_key(token), chainlink_price_feed_provider.address
-        ).transact({"from": config.user_wallet_address})
+        ).transact({"from": config.get_signer()})
 
         params["tokens"].append(token)
         params["providers"].append(chainlink_price_feed_provider.address)
@@ -480,7 +477,7 @@ def get_oracle_params(
         # Set the oracle provider for token using the SDK's pattern
         data_store.functions.setAddress(
             keys.oracle_provider_for_token_key(token), chainlink_data_stream_provider.address
-        ).transact({"from": config.user_wallet_address})
+        ).transact({"from": config.get_signer()})
 
         params["tokens"].append(token)
         params["providers"].append(chainlink_data_stream_provider.address)

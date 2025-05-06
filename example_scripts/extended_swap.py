@@ -1,4 +1,6 @@
 # from example_scripts.debug_swap import JSON_RPC_BASE
+from gmx_python_sdk.scripts.v2.utils.exchange import execute_with_oracle_params
+from gmx_python_sdk.scripts.v2.utils.hash_utils import hash_data
 from utils import _set_paths
 
 _set_paths()
@@ -29,7 +31,7 @@ import os
 import logging
 import time
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/d71b7272-3f11-409f-a637-dff5f08e9e74"
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/94ce29a3-cca4-4d0e-9d83-24e6a16a4cbb"
 
 # Create the ORDER_LIST key directly
 ORDER_LIST = create_hash_string("ORDER_LIST")
@@ -126,10 +128,10 @@ class EnhancedSwapOrder(SwapOrder):
 
         print(f"Order creation transaction hash: {tx_hash.hex()}")
         receipt = self._connection.eth.wait_for_transaction_receipt(tx_hash)
-        for log in receipt.logs:
-            # Try to decode logs if you have relevant ABIs
-            print(f"Log topics: {log['topics']}")
-            print(f"Log data: {log['data'].hex()}")
+        # for log in receipt.logs:
+        #     # Try to decode logs if you have relevant ABIs
+        #     print(f"Log topics: {log['topics']}")
+        #     print(f"Log data: {log['data'].hex()}")
 
         # Get the order key from datastore using the ORDER_LIST constant we created
         datastore = get_datastore_contract(self.config)
@@ -146,59 +148,97 @@ class EnhancedSwapOrder(SwapOrder):
 
         return order_key
 
-    def execute_order(self, order_key):
+    def execute_order(self, order_key, overrides=None):
         """Execute an order with oracle prices"""
-        # Get oracle prices
-        prices = OraclePrices(chain=self.config.chain).get_recent_prices()
 
-        # Get token addresses
-        start_token_addr = convert_to_checksum_address(self.config, self.start_token)
-        out_token_addr = convert_to_checksum_address(self.config, self.out_token)
+        if overrides is None:
+            overrides = {}
+        # Get the datastore contract
+        # datastore = get_datastore_contract(self.config)
 
-        # Get token prices
-        token_prices = []
-        for token_addr in [start_token_addr, out_token_addr]:
-            token_prices.append([int(prices[token_addr]["minPriceFull"]), int(prices[token_addr]["maxPriceFull"])])
+        # Process override parameters
+        gas_usage_label = overrides.get("gas_usage_label")
+        oracle_block_number_offset = overrides.get("oracle_block_number_offset")
 
-        # Get exchange router contract
-        exchange_router = get_exchange_router_contract(self.config)
-
-        # Build transaction for ACTUAL execution (not simulation)
-        primary_tokens = [start_token_addr, out_token_addr]
-
-        # Prepare execution parameters with timestamp values
-        execution_params = {
-            "primaryTokens": primary_tokens,
-            "primaryPrices": token_prices,
-            "minTimestamp": 0,
-            "maxTimestamp": 0,
-        }
-
-        user_wallet_address = self.config.user_wallet_address
-        signer = self.config.get_signer()
-
-        # For debugging
-        print(f"Executing order with key: {order_key.hex()}")
-        print(f"Primary tokens: {primary_tokens}")
-        print(f"Token prices: {token_prices}")
-
-        # Build the transaction - using executeOrder instead of simulateExecuteOrder
-        execute_tx = exchange_router.functions.simulateExecuteOrder(order_key, execution_params).build_transaction(
-            {
-                "from": user_wallet_address,
-                "gas": 3000000,
-                "gasPrice": self._connection.eth.gas_price,
-                "nonce": self._connection.eth.get_transaction_count(user_wallet_address),
-            }
+        # Set token addresses if not provided
+        tokens = overrides.get(
+            "tokens",
+            [
+                to_checksum_address("0xf97f4df75117a78c1a5a0dbb814af92458539fb4"),  # LINK on Arbitrum
+                to_checksum_address("0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07"),  # SOL on Arbitrum
+            ],
         )
 
-        # Sign and send transaction
-        tx_hash = signer.send_transaction(execute_tx)
+        # Set default parameters if not provided
+        data_stream_tokens = overrides.get("data_stream_tokens", [])
+        data_stream_data = overrides.get("data_stream_data", [])
+        price_feed_tokens = overrides.get("price_feed_tokens", [])
+        precisions = overrides.get("precisions", [8, 18])
 
-        print(f"Order executed with tx hash: {tx_hash.hex()}")
-        receipt = self._connection.eth.wait_for_transaction_receipt(tx_hash)
+        # Default prices (equivalent to expandDecimals(5000, 4) and expandDecimals(1, 6) in JS)
+        min_prices = overrides.get("min_prices", [5000 * 10**4, 1 * 10**6])
+        max_prices = overrides.get("max_prices", [5000 * 10**4, 1 * 10**6])
 
-        return receipt
+        # Get oracle block number if not provided
+        oracle_block_number = overrides.get("oracle_block_number")
+        if not oracle_block_number:
+            oracle_block_number = self._connection.eth.block_number
+
+        # Apply oracle block number offset if provided
+        if oracle_block_number_offset:
+            if oracle_block_number_offset > 0:
+                # Since we can't "mine" blocks in Python directly, this would be handled differently
+                # in a real application. Here we just adjust the number.
+                pass
+
+            oracle_block_number += oracle_block_number_offset
+
+        # Extract additional oracle parameters
+        oracle_blocks = overrides.get("oracle_blocks")
+        min_oracle_block_numbers = overrides.get("min_oracle_block_numbers")
+        max_oracle_block_numbers = overrides.get("max_oracle_block_numbers")
+        oracle_timestamps = overrides.get("oracle_timestamps")
+        block_hashes = overrides.get("block_hashes")
+
+        # Build the parameters for execute_with_oracle_params
+        params = {
+            "key": order_key,
+            "oracleBlockNumber": oracle_block_number,
+            "tokens": tokens,
+            "precisions": precisions,
+            "minPrices": min_prices,
+            "maxPrices": max_prices,
+            "simulate": overrides.get("simulate", False),
+            "gasUsageLabel": gas_usage_label,
+            "oracleBlocks": oracle_blocks,
+            "minOracleBlockNumbers": min_oracle_block_numbers,
+            "maxOracleBlockNumbers": max_oracle_block_numbers,
+            "oracleTimestamps": oracle_timestamps,
+            "blockHashes": block_hashes,
+            "dataStreamTokens": data_stream_tokens,
+            "dataStreamData": data_stream_data,
+            "priceFeedTokens": price_feed_tokens,
+        }
+
+        # Create a fixture-like object with necessary properties
+        fixture = {
+            "config": self.config,
+            "web3Provider": self._connection,
+            "chain": self.config.chain,
+            "accounts": {"signers": [self.config.get_signer()]},
+            "props": {
+                "oracleSalt": hash_data(["uint256", "string"], [self.config.chain_id, "xget-oracle-v1"]),
+                "signerIndexes": [0, 1, 2, 3, 4, 5, 6],  # Default signer indexes
+            },
+        }
+
+        print("************************")
+        print(f"params: {params}")
+        print("************************")
+        print(f"fixture: {fixture}")
+        print("************************")
+        # Call execute_with_oracle_params with the built parameters
+        return execute_with_oracle_params(fixture, params, self.config)
 
     def _submit_transaction(
         self,
@@ -360,7 +400,23 @@ def main(rpc="http://localhost:8545"):
 
     # Create the order and get the key
     try:
-        order_key = order.create_order_and_get_key()
+        # order_key = order.create_order_and_get_key()
+
+        data_store = get_datastore_contract(config)
+
+        # print(f"Order LIST: {ORDER_LIST.hex()}")
+
+        assert ORDER_LIST.hex() == "0x86f7cfd5d8f8404e5145c91bebb8484657420159dabd0753d6a59f3de3f7b8c1"[2:], (
+            "Order list mismatch"
+        )
+        keys = data_store.functions.getBytes32ValuesAt(ORDER_LIST, 0, 20).call()
+        # print(f"Key: {keys}")
+        order_key = keys[-1]
+
+        for key in keys:
+            print(f"Key: {key.hex()}")
+
+        # print(f"Order key: {order_key.hex()}")
 
         # Execute the order with oracle prices
         order.execute_order(order_key)
@@ -374,7 +430,8 @@ def main(rpc="http://localhost:8545"):
 
         print(f"Change in SOL balance: {(balance - sol_balance_before) / 10**decimals}")
     except Exception as e:
-        print(f"Error during swap process: {str(e)}")
+        print(f"Error during swap process: {e!s}")
+        raise e
 
     return order
 

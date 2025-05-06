@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from eth_account.messages import encode_defunct
 
 
 class Signer(ABC):
@@ -17,6 +18,11 @@ class Signer(ABC):
     @abstractmethod
     def send_transaction(self, unsigned_tx):
         """Sign and send a transaction, returning the transaction hash."""
+        pass
+
+    @abstractmethod
+    def sign_message(self, message):
+        """Sign a message and return the signature."""
         pass
 
 
@@ -40,6 +46,35 @@ class PrivateKeySigner(Signer):
         except AttributeError:
             txn = signed_tx.rawTransaction
         return self.web3.eth.send_raw_transaction(txn)
+
+    def sign_message(self, message):
+        """
+        Sign a message using the private key
+
+        Args:
+            message: The message to sign (bytes or hex string)
+
+        Returns:
+            Signature as a hex string
+        """
+        # Ensure the message is in the right format
+        # Convert message to SignableMessage format
+        if isinstance(message, str):
+            if message.startswith("0x"):
+                message_bytes = encode_defunct(hexstr=message)
+            else:
+                message_bytes = encode_defunct(text=message)
+        elif isinstance(message, bytes):
+            message_bytes = encode_defunct(primitive=message)
+        else:
+            msg = f"Unsupported message type: {type(message)}"
+            raise TypeError(msg)
+
+        # Sign the message
+        signature = self.web3.eth.account.sign_message(message_bytes, private_key=self._account.key)
+
+        # Return the signature
+        return signature
 
 
 class Web3ProviderSigner(Signer):

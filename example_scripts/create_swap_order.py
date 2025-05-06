@@ -1,18 +1,29 @@
-# from example_scripts.debug_swap import JSON_RPC_BASE
-from utils import _set_paths
-
-_set_paths()
-
+import sys
+import os
+from eth_typing import HexStr
 from eth_utils import to_checksum_address
 from web3 import Web3
 
-from gmx_python_sdk.scripts.v2.gmx_utils import ConfigManager
+from gmx_python_sdk.scripts.v2.gmx_utils import ConfigManager, get_datastore_contract
 from gmx_python_sdk.scripts.v2.order.create_swap_order import SwapOrder
 from gmx_python_sdk.scripts.v2.order.order_argument_parser import OrderArgumentParser
+from gmx_python_sdk.scripts.v2.utils.keys import ORDER_LIST
 
-import os
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/8ebd8115-6fcf-49d4-96cb-d5c75ad4c9ed"  # "https://virtual.arbitrum.rpc.tenderly.co/338aa0f8-ef60-4ae1-baf9-958c3754686d" # os.getenv("ARBITRUM_CHAIN_JSON_RPC")
+def _set_paths():
+    # Get the directory of the current script
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Construct the path to the target directory relative to the current script
+    target_dir = os.path.join(current_dir, "../")
+    # Add the target directory to sys.path
+    sys.path.append(target_dir)
+
+
+_set_paths()
+
+
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/316fd902-62f0-4dfd-a4c8-2eda040581e2"  # "https://virtual.arbitrum.rpc.tenderly.co/338aa0f8-ef60-4ae1-baf9-958c3754686d" # os.getenv("ARBITRUM_CHAIN_JSON_RPC")
 
 
 def main(rpc="http://localhost:8545"):
@@ -97,7 +108,7 @@ def main(rpc="http://localhost:8545"):
         "size_delta_usd": 0,
         # if leverage is passed, will calculate number of tokens in
         # start_token_symbol amount
-        "initial_collateral_delta": 10000.000001,
+        "initial_collateral_delta": 100.000001,
         # as a percentage
         "slippage_percent": 0.02,
     }
@@ -127,6 +138,19 @@ def main(rpc="http://localhost:8545"):
     #     parameters["initial_collateral_delta"],
     # )
     # print(f"Estimated swap output: {swap_estimate}")
+
+    data_store = get_datastore_contract(config)
+
+    print(f"Order LIST: {ORDER_LIST.hex()}")
+
+    assert ORDER_LIST.hex() == "0x86f7cfd5d8f8404e5145c91bebb8484657420159dabd0753d6a59f3de3f7b8c1"[2:], (
+        "Order list mismatch"
+    )
+    keys = data_store.functions.getBytes32ValuesAt(ORDER_LIST, 0, 20).call()
+    # print(f"Key: {keys}")
+
+    for key in keys:
+        print(f"Key: {key.hex()}")
 
     balance = link_contract.functions.balanceOf(recipient_address).call()
     print(f"Recipient LINK balance after swap: {balance / (10**decimals)}")
