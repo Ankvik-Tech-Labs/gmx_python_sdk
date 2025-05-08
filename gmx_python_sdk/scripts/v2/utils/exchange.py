@@ -1,8 +1,6 @@
 import logging
 from typing import Any
 
-from eth_utils import to_checksum_address
-
 from gmx_python_sdk.scripts.v2.gmx_utils import get_contract_object
 from gmx_python_sdk.scripts.v2.utils.oracle import (
     get_oracle_params,
@@ -95,8 +93,7 @@ def execute_with_oracle_params(fixture, overrides: dict, config) -> Any:
     min_prices = overrides.get("minPrices", [])
     max_prices = overrides.get("maxPrices", [])
 
-    execute = overrides.get("execute")
-    simulate_execute = overrides.get("simulateExecute")
+    # execute = overrides.get("execute")
     simulate = overrides.get("simulate", False)
     gas_usage_label = overrides.get("gasUsageLabel")
     data_stream_tokens = overrides.get("dataStreamTokens", [])
@@ -121,10 +118,6 @@ def execute_with_oracle_params(fixture, overrides: dict, config) -> Any:
     # Validate inputs
     if len(tokens) > len(precisions) or len(tokens) > len(min_prices) or len(tokens) > len(max_prices):
         msg = "`tokens` should not be bigger than `precisions`, `minPrices` or `maxPrices`"
-        raise ValueError(msg)
-
-    if simulate and not simulate_execute:
-        msg = "`simulateExecute` is required if `simulate` is true"
         raise ValueError(msg)
 
     if not oracle_block_number:
@@ -221,9 +214,13 @@ def execute_with_oracle_params(fixture, overrides: dict, config) -> Any:
                 raise ex
             logging.info("Oracle simulation completed")
     else:
+        keeper_address = "0xE47b36382DC50b90bCF6176Ddb159C4b9333A7AB"
+        controller_address = "0xb6d37DFCdA9c237ca98215f9154Dc414EFe0aC1b"
         # Get full oracle parameters for execution
         print(f"Args for oracle params: {args}")
-        oracle_params = get_oracle_params(config=config, **args)
+        oracle_params = get_oracle_params(
+            config=config, keeper_address=keeper_address, controller_address=controller_address, **args
+        )
 
         logging.info(f"Key: {key}")
         logging.info(f"Oracle Params: {oracle_params}")
@@ -234,22 +231,23 @@ def execute_with_oracle_params(fixture, overrides: dict, config) -> Any:
             raise ValueError(msg)
 
         active_signer = signers[0]
-        nonce = web3_provider.eth.get_transaction_count(active_signer.get_address())
+        nonce = web3_provider.eth.get_transaction_count(keeper_address)
 
         # Build the transaction
         transaction = order_handler.functions.executeOrder(key, oracle_params).build_transaction(
             {
-                "from": to_checksum_address(active_signer.get_address()),
+                "from": keeper_address,  # to_checksum_address(active_signer.get_address()),
                 "nonce": nonce,
-                "gas": 3000000,  # Set appropriate gas limit
+                "gas": 80000000,  # Set appropriate gas limit
                 "maxFeePerGas": web3_provider.eth.gas_price * 2,  # Adjust as needed
                 "maxPriorityFeePerGas": web3_provider.eth.gas_price // 10,  # Adjust as needed
             }
         )
         # owner of order_handler 0xE7BfFf2aB721264887230037940490351700a068
         # Sign and send the transaction
-        signed_tx = active_signer.sign_transaction(transaction)
-        tx_hash = web3_provider.eth.send_raw_transaction(signed_tx.raw_transaction)
+        # signed_tx = active_signer.sign_transaction(transaction)
+        # tx_hash = web3_provider.eth.send_raw_transaction(signed_tx.raw_transaction)
+        tx_hash = web3_provider.eth.send_transaction(transaction)
 
         # A Python equivalent of logGasUsage function
         if gas_usage_label:

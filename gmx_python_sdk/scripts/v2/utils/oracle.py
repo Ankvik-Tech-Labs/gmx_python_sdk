@@ -61,11 +61,11 @@ def sign_price(
     if precision > int(MAX_UINT8):
         raise ValueError(f"precision exceeds max value: {precision}")
 
-    if min_price > int(MAX_UINT32):
-        raise ValueError(f"minPrice exceeds max value: {min_price}")
+    # if min_price > int(MAX_UINT32):
+    #     raise ValueError(f"minPrice exceeds max value: {min_price}")
 
-    if max_price > int(MAX_UINT32):
-        raise ValueError(f"maxPrice exceeds max value: {max_price}")
+    # if max_price > int(MAX_UINT32):
+    #     raise ValueError(f"maxPrice exceeds max value: {max_price}")
 
     expanded_precision = expand_decimals(1, int(precision))
     hash_result = hash_data(
@@ -144,7 +144,7 @@ def sign_prices(
     return signatures
 
 
-def get_signer_info(signer_indexes: list[int]) -> str:
+def get_signer_info(signer_indexes: list[int]) -> int:
     """
     Generate signer info from signer indexes
 
@@ -165,7 +165,7 @@ def get_signer_info(signer_indexes: list[int]) -> str:
         # Perform bitwise OR with shifted signer index
         signer_info |= signer_index << ((i + 1) * signer_index_length)
 
-    return str(signer_info)
+    return signer_info
 
 
 def get_compacted_values(
@@ -353,6 +353,8 @@ def get_oracle_params(
     data_stream_data: list[str],
     price_feed_tokens: list[str],
     config,
+    keeper_address: Optional[str] = None,
+    controller_address: Optional[str] = None,
 ) -> dict:
     """
     Get complete oracle parameters
@@ -379,8 +381,8 @@ def get_oracle_params(
         Dictionary with oracle parameters
     """
     # Get signer info
-    signer_info = get_signer_info(signer_indexes)
-
+    signer_info = 1  # get_signer_info(signer_indexes) # 31154177296857295712124637770940423
+    print(f"Signer info: {signer_info}")
     data_store = get_datastore_contract(config)
 
     # Get oracle provider contracts
@@ -428,7 +430,7 @@ def get_oracle_params(
         # Encode the data using the web3 connection from the SDK
         data_tuple = [
             token,
-            int(signer_info),
+            signer_info,
             precision,
             min_oracle_block_number,
             max_oracle_block_number,
@@ -438,6 +440,7 @@ def get_oracle_params(
             signed_max_prices,
             signatures,
         ]
+        print(f"Data tuple: {data_tuple}")
 
         # Use the appropriate encoding method for the web3.py version
         try:
@@ -466,7 +469,7 @@ def get_oracle_params(
         # Set the oracle provider for token using the SDK's pattern
         data_store.functions.setAddress(
             keys.oracle_provider_for_token_key(token), chainlink_price_feed_provider.address
-        ).transact({"from": config.get_signer()})
+        ).transact({"from": controller_address})
 
         params["tokens"].append(token)
         params["providers"].append(chainlink_price_feed_provider.address)
@@ -477,7 +480,7 @@ def get_oracle_params(
         # Set the oracle provider for token using the SDK's pattern
         data_store.functions.setAddress(
             keys.oracle_provider_for_token_key(token), chainlink_data_stream_provider.address
-        ).transact({"from": config.get_signer()})
+        ).transact({"from": controller_address})
 
         params["tokens"].append(token)
         params["providers"].append(chainlink_data_stream_provider.address)

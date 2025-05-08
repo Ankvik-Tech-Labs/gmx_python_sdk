@@ -1,4 +1,3 @@
-# from example_scripts.debug_swap import JSON_RPC_BASE
 from gmx_python_sdk.scripts.v2.utils.exchange import execute_with_oracle_params
 from gmx_python_sdk.scripts.v2.utils.hash_utils import hash_data
 from utils import _set_paths
@@ -11,30 +10,26 @@ from hexbytes import HexBytes
 
 from gmx_python_sdk.scripts.v2.gmx_utils import (
     ConfigManager,
-    contract_map,
     convert_to_checksum_address,
-    create_connection,
     get_datastore_contract,
-    get_exchange_router_contract,
-    get_estimated_swap_output,
     order_type,
     decrease_position_swap_type,
 )
-from gmx_python_sdk.scripts.v2.gas_utils import get_execution_fee, get_gas_limits
+from gmx_python_sdk.scripts.v2.gas_utils import get_execution_fee
 from gmx_python_sdk.scripts.v2.order.create_swap_order import SwapOrder
 from gmx_python_sdk.scripts.v2.order.order_argument_parser import OrderArgumentParser
 from gmx_python_sdk.scripts.v2.get.get_oracle_prices import OraclePrices
 from gmx_python_sdk.scripts.v2.get.get_markets import Markets
 from gmx_python_sdk.scripts.v2.keys import create_hash_string
+from rich.console import Console
 
-import os
-import logging
 import time
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/94ce29a3-cca4-4d0e-9d83-24e6a16a4cbb"
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/cd92f9e8-256c-4c7c-a7e7-59ba8f4987c9"
 
 # Create the ORDER_LIST key directly
 ORDER_LIST = create_hash_string("ORDER_LIST")
+print = Console().print
 
 
 # Extend the SwapOrder class with new methods
@@ -168,6 +163,25 @@ class EnhancedSwapOrder(SwapOrder):
                 to_checksum_address("0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07"),  # SOL on Arbitrum
             ],
         )
+        # TODO: Trace a full successfull workflow of `executeOrder` method to understand signer indexe
+
+        # Fetch real-time prices
+        oracle_prices = OraclePrices(chain=self.config.chain).get_recent_prices()
+
+        # Extract prices for the tokens
+        default_min_prices = []
+        default_max_prices = []
+
+        for token in tokens:
+            if token in oracle_prices:
+                token_data = oracle_prices[token]
+                default_min_prices.append(int(token_data["minPriceFull"]))
+                default_max_prices.append(int(token_data["maxPriceFull"]))
+            else:
+                # Fallback only if token not found in oracle prices
+                self.log.warning(f"Price for token {token} not found, using fallback price")
+                default_min_prices.append(5000 * 10**18 if token == tokens[0] else 1 * 10**9)
+                default_max_prices.append(5000 * 10**18 if token == tokens[0] else 1 * 10**9)
 
         # Set default parameters if not provided
         data_stream_tokens = overrides.get("data_stream_tokens", [])
@@ -175,9 +189,8 @@ class EnhancedSwapOrder(SwapOrder):
         price_feed_tokens = overrides.get("price_feed_tokens", [])
         precisions = overrides.get("precisions", [8, 18])
 
-        # Default prices (equivalent to expandDecimals(5000, 4) and expandDecimals(1, 6) in JS)
-        min_prices = overrides.get("min_prices", [5000 * 10**4, 1 * 10**6])
-        max_prices = overrides.get("max_prices", [5000 * 10**4, 1 * 10**6])
+        min_prices = default_min_prices
+        max_prices = default_max_prices
 
         # Get oracle block number if not provided
         oracle_block_number = overrides.get("oracle_block_number")
@@ -199,6 +212,8 @@ class EnhancedSwapOrder(SwapOrder):
         max_oracle_block_numbers = overrides.get("max_oracle_block_numbers")
         oracle_timestamps = overrides.get("oracle_timestamps")
         block_hashes = overrides.get("block_hashes")
+
+        oracle_signer = overrides.get("oracle_signer", self.config.get_signer())
 
         # Build the parameters for execute_with_oracle_params
         params = {
@@ -225,7 +240,8 @@ class EnhancedSwapOrder(SwapOrder):
             "config": self.config,
             "web3Provider": self._connection,
             "chain": self.config.chain,
-            "accounts": {"signers": [self.config.get_signer()]},
+            # "accounts": {"signers": [self.config.get_signer()] * 7},
+            "accounts": {"signers": [oracle_signer] * 7},
             "props": {
                 "oracleSalt": hash_data(["uint256", "string"], [self.config.chain_id, "xget-oracle-v1"]),
                 "signerIndexes": [0, 1, 2, 3, 4, 5, 6],  # Default signer indexes
@@ -311,6 +327,9 @@ class EnhancedSwapOrder(SwapOrder):
         return None
 
 
+GMX_ADMIN = "0x7A967D114B8676874FA2cFC1C14F3095C88418Eb"
+
+
 def main(rpc="http://localhost:8545"):
     w3 = Web3(Web3.HTTPProvider(JSON_RPC_BASE))
     print(f"Connected to Arbitrum with chain ID: {w3.eth.chain_id}")
@@ -374,7 +393,7 @@ def main(rpc="http://localhost:8545"):
         "start_token_symbol": "LINK",
         "is_long": False,
         "size_delta_usd": 0,
-        "initial_collateral_delta": 1000.000001,
+        "initial_collateral_delta": 10000.000001,
         "slippage_percent": 0.02,
     }
 
@@ -395,9 +414,9 @@ def main(rpc="http://localhost:8545"):
         swap_path=order_parameters["swap_path"],
         debug_mode=False,
         execution_buffer=2.2,
-        max_fee_per_gas=15,
+        max_fee_per_gas=63549000,
     )
-
+    # NOTE: What ever happens from here should be done by the addreess with higher clearance
     # Create the order and get the key
     try:
         # order_key = order.create_order_and_get_key()
@@ -413,13 +432,45 @@ def main(rpc="http://localhost:8545"):
         # print(f"Key: {keys}")
         order_key = keys[-1]
 
-        for key in keys:
-            print(f"Key: {key.hex()}")
+        # for key in keys:
+        #     print(f"Key: {key.hex()}")
+
+        # data_store_owner = "0xE7BfFf2aB721264887230037940490351700a068"
+        controller = "0xf5F30B10141E1F63FC11eD772931A8294a591996"
+        oracle_provider = "0x5d6B84086DA6d4B0b6C0dF7E02f8a6A039226530"
+        # NOTE: Somehow have to sign the oracle params by this bad boy
+        oracle_signer = "0x0F711379095f2F0a6fdD1e8Fccd6eBA0833c1F1f"
+        # set this value to true to pass the provider enabled check in contract
+        # OrderHandler(0xfc9bc118fddb89ff6ff720840446d73478de4153)
+        data_store.functions.setBool(
+            "0x1153e082323163af55b3003076402c9f890dda21455104e09a048bf53f1ab30c", True
+        ).transact({"from": controller})
+
+        value = data_store.functions.getBool(
+            "0x1153e082323163af55b3003076402c9f890dda21455104e09a048bf53f1ab30c"
+        ).call()
+        print(f"Value: {value}")
+
+        assert value, "Value should be true"
+        # need this to be set to pass the `Oracle._validatePrices` check. Key taken from tenderly tx debugger
+        bool_key: str = "0xf822de35ed59e423d2e1bce9fb480e7ad4646e4fd60d07c074ef9da8f71a1cab"  # "0xf986b0f912da0acadea6308636145bb2af568ddd07eb6c76b880b8f341fef306"
+
+        data_store.functions.setAddress(bool_key, oracle_provider).transact({"from": controller})
+        value = data_store.functions.getAddress(bool_key).call()
+        print(f"Value: {value}")
+        assert value == oracle_provider, "Value should be recipient address"
 
         # print(f"Order key: {order_key.hex()}")
-
+        overrides = {
+            "simulate": False,
+            # "oracle_signer": oracle_signer,
+            # "priceFeedTokens": [
+            #     to_checksum_address("0xf97f4df75117a78c1a5a0dbb814af92458539fb4"),  # LINK on Arbitrum
+            #     to_checksum_address("0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07"),  # SOL on Arbitrum
+            # ],
+        }
         # Execute the order with oracle prices
-        order.execute_order(order_key)
+        order.execute_order(order_key, overrides=overrides)
 
         # Check the balances after execution
         balance = link_contract.functions.balanceOf(recipient_address).call()
