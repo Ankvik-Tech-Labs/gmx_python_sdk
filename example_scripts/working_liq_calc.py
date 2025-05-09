@@ -12,7 +12,11 @@ from get_positions import get_positions
 
 from gmx_python_sdk.scripts.v2.get.get import GetData
 from gmx_python_sdk.scripts.v2.get.get_markets import Markets
-from gmx_python_sdk.scripts.v2.gmx_utils import ConfigManager, get_datastore_contract, get_reader_contract
+from gmx_python_sdk.scripts.v2.gmx_utils import (
+    ConfigManager,
+    get_datastore_contract,
+    get_reader_contract,
+)
 from gmx_python_sdk.scripts.v2.keys import (
     accountPositionListKey,
     max_position_impact_factor_for_liquidations_key,

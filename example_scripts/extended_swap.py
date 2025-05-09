@@ -25,7 +25,7 @@ from rich.console import Console
 
 import time
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/cd92f9e8-256c-4c7c-a7e7-59ba8f4987c9"
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/ecdf8cef-3f85-45ef-bd96-a5e4b77693bf" # "https://virtual.arbitrum.rpc.tenderly.co/cb7c9365-06c4-4e7c-a65f-07ae4e19e721"
 
 # Create the ORDER_LIST key directly
 ORDER_LIST = create_hash_string("ORDER_LIST")
@@ -56,7 +56,9 @@ class EnhancedSwapOrder(SwapOrder):
 
         # Get minimum output amount from estimation
         estimated_output = self.estimated_swap_output(
-            Markets(self.config).info[self.swap_path[0]], self.collateral_address, self.initial_collateral_delta_amount
+            Markets(self.config).info[self.swap_path[0]],
+            self.collateral_address,
+            self.initial_collateral_delta_amount,
         )
         min_output_amount = int(
             estimated_output["out_token_amount"] - estimated_output["out_token_amount"] * self.slippage_percent
@@ -118,7 +120,11 @@ class EnhancedSwapOrder(SwapOrder):
 
         # Submit transaction and get receipt
         tx_hash = self._submit_transaction(
-            user_wallet_address, value_amount, multicall_args, self._gas_limits, return_hash=True
+            user_wallet_address,
+            value_amount,
+            multicall_args,
+            self._gas_limits,
+            return_hash=True,
         )
 
         print(f"Order creation transaction hash: {tx_hash.hex()}")
@@ -187,7 +193,7 @@ class EnhancedSwapOrder(SwapOrder):
         data_stream_tokens = overrides.get("data_stream_tokens", [])
         data_stream_data = overrides.get("data_stream_data", [])
         price_feed_tokens = overrides.get("price_feed_tokens", [])
-        precisions = overrides.get("precisions", [8, 18])
+        precisions = overrides.get("precisions", [18, 9])
 
         min_prices = default_min_prices
         max_prices = default_max_prices
@@ -331,7 +337,7 @@ GMX_ADMIN = "0x7A967D114B8676874FA2cFC1C14F3095C88418Eb"
 
 
 def main(rpc="http://localhost:8545"):
-    w3 = Web3(Web3.HTTPProvider(JSON_RPC_BASE))
+    w3 = Web3(Web3.HTTPProvider(rpc))
     print(f"Connected to Arbitrum with chain ID: {w3.eth.chain_id}")
 
     # Addresses
@@ -382,7 +388,7 @@ def main(rpc="http://localhost:8545"):
     # GMX config
     config = ConfigManager(chain="arbitrum")
     config.set_config()
-    config.set_rpc(JSON_RPC_BASE)
+    config.set_rpc(rpc)
 
     # Important: Set the user wallet address
     config.user_wallet_address = recipient_address
@@ -414,7 +420,7 @@ def main(rpc="http://localhost:8545"):
         swap_path=order_parameters["swap_path"],
         debug_mode=False,
         execution_buffer=2.2,
-        max_fee_per_gas=63549000,
+        max_fee_per_gas=93510000 * 2,
     )
     # NOTE: What ever happens from here should be done by the addreess with higher clearance
     # Create the order and get the key
@@ -437,7 +443,8 @@ def main(rpc="http://localhost:8545"):
 
         # data_store_owner = "0xE7BfFf2aB721264887230037940490351700a068"
         controller = "0xf5F30B10141E1F63FC11eD772931A8294a591996"
-        oracle_provider = "0x5d6B84086DA6d4B0b6C0dF7E02f8a6A039226530"
+        oracle_provider = "0x5d6B84086DA6d4B0b6C0dF7E02f8a6A039226530" # "0xF16C65eB389650C212f817A9b901628ce9C5e790" # "0x5d6B84086DA6d4B0b6C0dF7E02f8a6A039226530"
+        custom_oracle_provider = "0xF16C65eB389650C212f817A9b901628ce9C5e790"
         # NOTE: Somehow have to sign the oracle params by this bad boy
         oracle_signer = "0x0F711379095f2F0a6fdD1e8Fccd6eBA0833c1F1f"
         # set this value to true to pass the provider enabled check in contract
@@ -452,13 +459,41 @@ def main(rpc="http://localhost:8545"):
         print(f"Value: {value}")
 
         assert value, "Value should be true"
-        # need this to be set to pass the `Oracle._validatePrices` check. Key taken from tenderly tx debugger
-        bool_key: str = "0xf822de35ed59e423d2e1bce9fb480e7ad4646e4fd60d07c074ef9da8f71a1cab"  # "0xf986b0f912da0acadea6308636145bb2af568ddd07eb6c76b880b8f341fef306"
 
-        data_store.functions.setAddress(bool_key, oracle_provider).transact({"from": controller})
-        value = data_store.functions.getAddress(bool_key).call()
+        # TODO: Get this value dynamically https://github.com/gmx-io/gmx-synthetics/blob/e8344b5086f67518ca8d33e88c6be0737f6ae4a4/contracts/data/Keys.sol#L938
+        # Enable the oracle provider
+        data_store.functions.setBool(
+        "0x1077e534dd73055304c84c8ce14ef9694dbfd92908731a18c7dd9a54a70ba762", True).transact(
+            {"from": controller})
+        is_oracle_provider_enabled: bool = data_store.functions.getBool(
+            "0x1077e534dd73055304c84c8ce14ef9694dbfd92908731a18c7dd9a54a70ba762"
+        ).call()
+        print(f"Value: {is_oracle_provider_enabled}")
+        assert is_oracle_provider_enabled, "Value should be true"
+
+
+        # pass the test `address expectedProvider = dataStore.getAddress(Keys.oracleProviderForTokenKey(token));` in Oracle.sol#L278
+        data_store.functions.setAddress("0x74017d3837d8c7e3775331e2ed46f368cb3d0fdd145b947afb76d6049cd2c0fe", custom_oracle_provider).transact(
+            {"from": controller}
+        )
+
+        new_address = data_store.functions.getAddress(
+            "0x74017d3837d8c7e3775331e2ed46f368cb3d0fdd145b947afb76d6049cd2c0fe"
+        ).call()
+        print(f"New address: {new_address}")
+        # 0x0000000000000000000000005d6B84086DA6d4B0b6C0dF7E02f8a6A039226530
+        assert new_address == custom_oracle_provider, (
+            "New address should be the oracle provider"
+        )
+
+
+        # need this to be set to pass the `Oracle._validatePrices` check. Key taken from tenderly tx debugger
+        address_key: str = "0xf986b0f912da0acadea6308636145bb2af568ddd07eb6c76b880b8f341fef306"  # "0xf986b0f912da0acadea6308636145bb2af568ddd07eb6c76b880b8f341fef306"
+
+        data_store.functions.setAddress(address_key, custom_oracle_provider).transact({"from": controller})
+        value = data_store.functions.getAddress(address_key).call()
         print(f"Value: {value}")
-        assert value == oracle_provider, "Value should be recipient address"
+        assert value == custom_oracle_provider, "Value should be recipient address"
 
         # print(f"Order key: {order_key.hex()}")
         overrides = {
@@ -488,4 +523,7 @@ def main(rpc="http://localhost:8545"):
 
 
 if __name__ == "__main__":
+    from anvil_set import set_opt_code
+
+    # set_opt_code(JSON_RPC_BASE)
     main(JSON_RPC_BASE)

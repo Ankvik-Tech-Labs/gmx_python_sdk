@@ -4,7 +4,9 @@ _set_paths()
 
 from gmx_python_sdk.scripts.v2.gmx_utils import ConfigManager
 from gmx_python_sdk.scripts.v2.order.create_withdrawal_order import WithdrawOrder
-from gmx_python_sdk.scripts.v2.order.liquidity_argument_parser import LiquidityArgumentParser
+from gmx_python_sdk.scripts.v2.order.liquidity_argument_parser import (
+    LiquidityArgumentParser,
+)
 
 config = ConfigManager("arbitrum")
 config.set_config()
