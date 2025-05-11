@@ -23,7 +23,7 @@ def _set_paths():
 _set_paths()
 
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/316fd902-62f0-4dfd-a4c8-2eda040581e2"  # "https://virtual.arbitrum.rpc.tenderly.co/338aa0f8-ef60-4ae1-baf9-958c3754686d" # os.getenv("ARBITRUM_CHAIN_JSON_RPC")
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/be06beda-af74-4457-8752-d10012ab2bb6"  # "https://virtual.arbitrum.rpc.tenderly.co/338aa0f8-ef60-4ae1-baf9-958c3754686d" # os.getenv("ARBITRUM_CHAIN_JSON_RPC")
 
 
 def main(rpc="http://localhost:8545"):
@@ -129,7 +129,7 @@ def main(rpc="http://localhost:8545"):
         swap_path=order_parameters["swap_path"],
         debug_mode=False,
         execution_buffer=2.2,
-        max_fee_per_gas=15,
+        max_fee_per_gas=10976000 * 15,
     )
 
     # swap_estimate = order.estimated_swap_output(

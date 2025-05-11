@@ -1,5 +1,7 @@
+from os import link
 from gmx_python_sdk.scripts.v2.utils.exchange import execute_with_oracle_params
 from gmx_python_sdk.scripts.v2.utils.hash_utils import hash_data
+from gmx_python_sdk.scripts.v2.utils.keys import IS_ORACLE_PROVIDER_ENABLED, MAX_ORACLE_REF_PRICE_DEVIATION_FACTOR
 from utils import _set_paths
 
 _set_paths()
@@ -22,10 +24,12 @@ from gmx_python_sdk.scripts.v2.get.get_oracle_prices import OraclePrices
 from gmx_python_sdk.scripts.v2.get.get_markets import Markets
 from gmx_python_sdk.scripts.v2.keys import create_hash_string
 from rich.console import Console
+from eth_abi import encode
+from eth_utils import keccak
 
 import time
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/ecdf8cef-3f85-45ef-bd96-a5e4b77693bf" # "https://virtual.arbitrum.rpc.tenderly.co/cb7c9365-06c4-4e7c-a65f-07ae4e19e721"
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/6931d8d4-5b71-4778-82fc-ac8390d6f068" # "https://virtual.arbitrum.rpc.tenderly.co/cb7c9365-06c4-4e7c-a65f-07ae4e19e721"
 
 # Create the ORDER_LIST key directly
 ORDER_LIST = create_hash_string("ORDER_LIST")
@@ -173,6 +177,7 @@ class EnhancedSwapOrder(SwapOrder):
 
         # Fetch real-time prices
         oracle_prices = OraclePrices(chain=self.config.chain).get_recent_prices()
+        print(f"Oracle prices: {oracle_prices}")
 
         # Extract prices for the tokens
         default_min_prices = []
@@ -181,8 +186,26 @@ class EnhancedSwapOrder(SwapOrder):
         for token in tokens:
             if token in oracle_prices:
                 token_data = oracle_prices[token]
-                default_min_prices.append(int(token_data["minPriceFull"]))
-                default_max_prices.append(int(token_data["maxPriceFull"]))
+                
+                # Get the base price values
+                min_price = int(token_data["minPriceFull"])
+                max_price = int(token_data["maxPriceFull"])
+                
+                # # Apply appropriate decimal scaling based on token
+                # if token_data["tokenSymbol"] == "LINK" or token_data["tokenAddress"] == "0xf97f4df75117a78c1a5a0dbb814af92458539fb4":
+                #     # Scale for LINK with 18 decimals
+                #     min_price = min_price * 10**18
+                #     max_price = max_price * 10**18
+                # elif token_data["tokenSymbol"] == "SOL" or token_data["tokenAddress"] == "0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07":
+                #     # Scale for SOL with 9 decimals
+                #     min_price = min_price * 10**9
+                #     max_price = max_price * 10**9
+                # # For other tokens, use their default scaling if needed
+                # # else:
+                # #    min_price = min_price * 10**default_decimals
+                
+                default_min_prices.append(min_price)
+                default_max_prices.append(max_price)
             else:
                 # Fallback only if token not found in oracle prices
                 self.log.warning(f"Price for token {token} not found, using fallback price")
@@ -193,10 +216,15 @@ class EnhancedSwapOrder(SwapOrder):
         data_stream_tokens = overrides.get("data_stream_tokens", [])
         data_stream_data = overrides.get("data_stream_data", [])
         price_feed_tokens = overrides.get("price_feed_tokens", [])
-        precisions = overrides.get("precisions", [18, 9])
+        # precisions = overrides.get("precisions", [18, 9])
+        #? Don't sclae it 
+        precisions = overrides.get("precisions", [1, 1])
 
         min_prices = default_min_prices
         max_prices = default_max_prices
+
+        # print("min_prices: ", min_prices)
+        # print("max_prices: ", max_prices)
 
         # Get oracle block number if not provided
         oracle_block_number = overrides.get("oracle_block_number")
@@ -443,8 +471,8 @@ def main(rpc="http://localhost:8545"):
 
         # data_store_owner = "0xE7BfFf2aB721264887230037940490351700a068"
         controller = "0xf5F30B10141E1F63FC11eD772931A8294a591996"
-        oracle_provider = "0x5d6B84086DA6d4B0b6C0dF7E02f8a6A039226530" # "0xF16C65eB389650C212f817A9b901628ce9C5e790" # "0x5d6B84086DA6d4B0b6C0dF7E02f8a6A039226530"
-        custom_oracle_provider = "0xF16C65eB389650C212f817A9b901628ce9C5e790"
+        oracle_provider = "0x5d6B84086DA6d4B0b6C0dF7E02f8a6A039226530"
+        custom_oracle_provider = "0xA1D67424a5122d83831A14Fa5cB9764Aeb15CD99"
         # NOTE: Somehow have to sign the oracle params by this bad boy
         oracle_signer = "0x0F711379095f2F0a6fdD1e8Fccd6eBA0833c1F1f"
         # set this value to true to pass the provider enabled check in contract
@@ -460,13 +488,18 @@ def main(rpc="http://localhost:8545"):
 
         assert value, "Value should be true"
 
-        # TODO: Get this value dynamically https://github.com/gmx-io/gmx-synthetics/blob/e8344b5086f67518ca8d33e88c6be0737f6ae4a4/contracts/data/Keys.sol#L938
+        #* Dynamically fetch the storage slot for the oracle provider
+        #? Get this value dynamically https://github.com/gmx-io/gmx-synthetics/blob/e8344b5086f67518ca8d33e88c6be0737f6ae4a4/contracts/data/Keys.sol#L938
+        #? Python ref: https://gist.github.com/Aviksaikat/cc69acb525695e44db340d64e9889f5e
+        encoded_data = encode(["bytes32", "address"], [IS_ORACLE_PROVIDER_ENABLED, custom_oracle_provider])
+        slot = f"0x{keccak(encoded_data).hex()}"
+
         # Enable the oracle provider
         data_store.functions.setBool(
-        "0x1077e534dd73055304c84c8ce14ef9694dbfd92908731a18c7dd9a54a70ba762", True).transact(
+        slot, True).transact(
             {"from": controller})
         is_oracle_provider_enabled: bool = data_store.functions.getBool(
-            "0x1077e534dd73055304c84c8ce14ef9694dbfd92908731a18c7dd9a54a70ba762"
+            slot
         ).call()
         print(f"Value: {is_oracle_provider_enabled}")
         assert is_oracle_provider_enabled, "Value should be true"
@@ -494,6 +527,28 @@ def main(rpc="http://localhost:8545"):
         value = data_store.functions.getAddress(address_key).call()
         print(f"Value: {value}")
         assert value == custom_oracle_provider, "Value should be recipient address"
+        
+        #? Set another key value to pass the test in `Oracle.sol` this time for ChainlinkDataStreamProvider
+        address_key: str = "0x659d3e479f4f2d295ea225e3d439a6b9d6fbf14a5cd4689e7d007fbab44acb8a"
+        data_store.functions.setAddress(address_key, custom_oracle_provider).transact({"from": controller})
+        value = data_store.functions.getAddress(address_key).call()
+        print(f"Value: {value}")
+        assert value == custom_oracle_provider, "Value should be recipient address"
+
+        #? Set the `maxRefPriceDeviationFactor` to pass tests in `Oracle.sol`
+        price_deviation_factor_key: str = f"0x{MAX_ORACLE_REF_PRICE_DEVIATION_FACTOR.hex()}"
+        #* set some big value to pass the test
+        large_value: int = 10021573904618365809021423188717
+        data_store.functions.setUint(price_deviation_factor_key, large_value).transact({"from": controller})
+        value = data_store.functions.getUint(price_deviation_factor_key).call()
+        print(f"Value: {value}")
+        assert value == large_value, f"Value should be {large_value}"
+
+        # # ! Can't do it here
+        # oracle_contract = get_contract_object(config.get_web3_connection(), "oracle", config.chain)
+        # # ETH PRICE
+        # oracle_contract.functions.setPrimaryPrice(link_token_address, (2492652716024169, 2492891019455477)).transact({"from": controller})
+
 
         # print(f"Order key: {order_key.hex()}")
         overrides = {
