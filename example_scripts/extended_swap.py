@@ -1,4 +1,8 @@
+import json
 from os import link
+from pathlib import Path
+from typing import Optional
+from gmx_python_sdk.scripts.v2.order import deposit
 from gmx_python_sdk.scripts.v2.utils.exchange import execute_with_oracle_params
 from gmx_python_sdk.scripts.v2.utils.hash_utils import hash_data
 from gmx_python_sdk.scripts.v2.utils.keys import IS_ORACLE_PROVIDER_ENABLED, MAX_ORACLE_REF_PRICE_DEVIATION_FACTOR
@@ -14,6 +18,7 @@ from gmx_python_sdk.scripts.v2.gmx_utils import (
     ConfigManager,
     convert_to_checksum_address,
     get_datastore_contract,
+    get_reader_contract,
     order_type,
     decrease_position_swap_type,
 )
@@ -29,7 +34,7 @@ from eth_utils import keccak
 
 import time
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/6931d8d4-5b71-4778-82fc-ac8390d6f068" # "https://virtual.arbitrum.rpc.tenderly.co/cb7c9365-06c4-4e7c-a65f-07ae4e19e721"
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/b92017e6-4de9-40bc-b8d7-498df9a1e9c5"
 
 # Create the ORDER_LIST key directly
 ORDER_LIST = create_hash_string("ORDER_LIST")
@@ -153,7 +158,7 @@ class EnhancedSwapOrder(SwapOrder):
 
         return order_key
 
-    def execute_order(self, order_key, overrides=None):
+    def execute_order(self, order_key, deployed_oracle_address, overrides=None):
         """Execute an order with oracle prices"""
 
         if overrides is None:
@@ -177,7 +182,7 @@ class EnhancedSwapOrder(SwapOrder):
 
         # Fetch real-time prices
         oracle_prices = OraclePrices(chain=self.config.chain).get_recent_prices()
-        print(f"Oracle prices: {oracle_prices}")
+        # print(f"Oracle prices: {oracle_prices}")
 
         # Extract prices for the tokens
         default_min_prices = []
@@ -186,11 +191,11 @@ class EnhancedSwapOrder(SwapOrder):
         for token in tokens:
             if token in oracle_prices:
                 token_data = oracle_prices[token]
-                
+
                 # Get the base price values
                 min_price = int(token_data["minPriceFull"])
                 max_price = int(token_data["maxPriceFull"])
-                
+
                 # # Apply appropriate decimal scaling based on token
                 # if token_data["tokenSymbol"] == "LINK" or token_data["tokenAddress"] == "0xf97f4df75117a78c1a5a0dbb814af92458539fb4":
                 #     # Scale for LINK with 18 decimals
@@ -203,7 +208,7 @@ class EnhancedSwapOrder(SwapOrder):
                 # # For other tokens, use their default scaling if needed
                 # # else:
                 # #    min_price = min_price * 10**default_decimals
-                
+
                 default_min_prices.append(min_price)
                 default_max_prices.append(max_price)
             else:
@@ -217,7 +222,7 @@ class EnhancedSwapOrder(SwapOrder):
         data_stream_data = overrides.get("data_stream_data", [])
         price_feed_tokens = overrides.get("price_feed_tokens", [])
         # precisions = overrides.get("precisions", [18, 9])
-        #? Don't sclae it 
+        # ? Don't sclae it
         precisions = overrides.get("precisions", [1, 1])
 
         min_prices = default_min_prices
@@ -288,7 +293,7 @@ class EnhancedSwapOrder(SwapOrder):
         print(f"fixture: {fixture}")
         print("************************")
         # Call execute_with_oracle_params with the built parameters
-        return execute_with_oracle_params(fixture, params, self.config)
+        return execute_with_oracle_params(fixture, params, self.config, deployed_oracle_address=deployed_oracle_address)
 
     def _submit_transaction(
         self,
@@ -363,6 +368,141 @@ class EnhancedSwapOrder(SwapOrder):
 
 GMX_ADMIN = "0x7A967D114B8676874FA2cFC1C14F3095C88418Eb"
 
+def deploy_custom_oracle(w3: Web3, account) -> str:
+    # Check balance
+    balance = w3.eth.get_balance(account.get_address())
+    print(f"Deployer balance: {w3.from_wei(balance, 'ether')} ETH")
+
+    # Load contract ABI and bytecode
+    artifacts_path = Path("./example_scripts/Oracle.json")
+    with open(artifacts_path) as f:
+        contract_json = json.load(f)
+        abi = contract_json["abi"]
+        bytecode = contract_json["bytecode"]
+
+    # Constructor arguments
+    role_store = "0x3c3d99FD298f679DBC2CEcd132b4eC4d0F5e6e72"
+    data_store = "0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8"
+    event_emitter = "0xC8ee91A54287DB53897056e12D9819156D3822Fb"
+    sequender_uptime_feed = "0xFdB631F5EE196F0ed6FAa767959853A9F217697D"
+
+    # Create contract factory
+    contract = w3.eth.contract(abi=abi, bytecode=bytecode)
+
+    # Prepare transaction for contract deployment
+    nonce = w3.eth.get_transaction_count(account.get_address())
+    transaction = contract.constructor(role_store, data_store, event_emitter, sequender_uptime_feed).build_transaction(
+        {
+            "from": account.get_address(),
+            "nonce": nonce,
+            "gas": 33000000,
+            "gasPrice": w3.to_wei("50", "gwei"),
+        }
+    )
+
+    # Sign transaction
+    signed_txn = w3.eth.account.sign_transaction(transaction, account._account.key)
+
+    # Send transaction
+    tx_hash = w3.eth.send_raw_transaction(signed_txn.raw_transaction)
+    print(f"📝 Deployment tx hash: {tx_hash.hex()}")
+
+    # Wait for transaction receipt
+    tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+    contract_address = tx_receipt.contractAddress
+    print(f"🚀 Deployed GmOracleProvider to: {contract_address}")
+    print(f"   Gas used: {tx_receipt.gasUsed}")
+
+    # Get deployed contract
+    deployed_contract = w3.eth.contract(address=contract_address, abi=abi)
+
+    # Fetch on-chain bytecode and print its size
+    code = w3.eth.get_code(contract_address)
+    print(f"📦 On-chain code size (bytes): {len(code) // 2}")
+
+    # List contract methods
+    methods = [func for func in deployed_contract.functions]
+    print("🔧 Available contract methods:")
+    for method in methods:
+        print(f"   - {method}")
+
+    # Verify constructor-stored state
+    role_store_address = deployed_contract.functions.roleStore().call()
+    data_store_address = deployed_contract.functions.dataStore().call()
+    event_emitter_address = deployed_contract.functions.eventEmitter().call()
+
+    print(f"📌 roleStore address: {role_store_address}")
+    print(f"📌 dataStore address: {data_store_address}")
+    print(f"📌 eventEmitter address: {event_emitter_address}")
+
+    return contract_address
+
+def deploy_custom_oracle_provider(w3: Web3, account) -> str:
+    # Check balance
+    balance = w3.eth.get_balance(account.get_address())
+    print(f"Deployer balance: {w3.from_wei(balance, 'ether')} ETH")
+
+    # Load contract ABI and bytecode
+    artifacts_path = Path("./example_scripts/GmOracleProvider.json")
+    with open(artifacts_path) as f:
+        contract_json = json.load(f)
+        abi = contract_json["abi"]
+        bytecode = contract_json["bytecode"]
+
+    # Constructor arguments
+    role_store = "0x3c3d99FD298f679DBC2CEcd132b4eC4d0F5e6e72"
+    data_store = "0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8"
+    oracle_store = "0xA8AF9B86fC47deAde1bc66B12673706615E2B011"
+
+    # Create contract factory
+    contract = w3.eth.contract(abi=abi, bytecode=bytecode)
+
+    # Prepare transaction for contract deployment
+    nonce = w3.eth.get_transaction_count(account.get_address())
+    transaction = contract.constructor(role_store, data_store, oracle_store).build_transaction(
+        {
+            "from": account.get_address(),
+            "nonce": nonce,
+            "gas": 33000000,
+            "gasPrice": w3.to_wei("50", "gwei"),
+        }
+    )
+
+    # Sign transaction
+    signed_txn = w3.eth.account.sign_transaction(transaction, account._account.key)
+
+    # Send transaction
+    tx_hash = w3.eth.send_raw_transaction(signed_txn.raw_transaction)
+    print(f"📝 Deployment tx hash: {tx_hash.hex()}")
+
+    # Wait for transaction receipt
+    tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+    contract_address = tx_receipt.contractAddress
+    print(f"🚀 Deployed GmOracleProvider to: {contract_address}")
+    print(f"   Gas used: {tx_receipt.gasUsed}")
+
+    # Get deployed contract
+    deployed_contract = w3.eth.contract(address=contract_address, abi=abi)
+
+    # Fetch on-chain bytecode and print its size
+    code = w3.eth.get_code(contract_address)
+    print(f"📦 On-chain code size (bytes): {len(code) // 2}")
+
+    # List contract methods
+    methods = [func for func in deployed_contract.functions]
+    print("🔧 Available contract methods:")
+    for method in methods:
+        print(f"   - {method}")
+
+    # Verify constructor-stored state
+    role_store_address = deployed_contract.functions.roleStore().call()
+    data_store_address = deployed_contract.functions.dataStore().call()
+
+    print(f"📌 roleStore address: {role_store_address}")
+    print(f"📌 dataStore address: {data_store_address}")
+
+    return contract_address
+
 
 def main(rpc="http://localhost:8545"):
     w3 = Web3(Web3.HTTPProvider(rpc))
@@ -430,9 +570,16 @@ def main(rpc="http://localhost:8545"):
         "initial_collateral_delta": 10000.000001,
         "slippage_percent": 0.02,
     }
-
+    # if we have already deployed then set the addres if not set to None
+    deployed: Optional[tuple[str]] = (None, None) # (None, None)
+    if not deployed[0]:
+        deployed_oracle_address = deploy_custom_oracle_provider(w3, config.get_signer())
+        custom_oracle_contract_address = deploy_custom_oracle(w3, config.get_signer())
+    else:
+        deployed_oracle_address = deployed[0]
+        custom_oracle_contract_address = deployed[1]
     order_parameters = OrderArgumentParser(config, is_swap=True).process_parameters_dictionary(parameters)
-
+    print(f"Order parameters: {order_parameters}")
     # Create our enhanced swap order
     order = EnhancedSwapOrder(
         config=config,
@@ -448,7 +595,7 @@ def main(rpc="http://localhost:8545"):
         swap_path=order_parameters["swap_path"],
         debug_mode=False,
         execution_buffer=2.2,
-        max_fee_per_gas=93510000 * 2,
+        max_fee_per_gas=365723000 * 2,
     )
     # NOTE: What ever happens from here should be done by the addreess with higher clearance
     # Create the order and get the key
@@ -462,17 +609,25 @@ def main(rpc="http://localhost:8545"):
         assert ORDER_LIST.hex() == "0x86f7cfd5d8f8404e5145c91bebb8484657420159dabd0753d6a59f3de3f7b8c1"[2:], (
             "Order list mismatch"
         )
-        keys = data_store.functions.getBytes32ValuesAt(ORDER_LIST, 0, 20).call()
-        # print(f"Key: {keys}")
-        order_key = keys[-1]
+        order_count = data_store.functions.getBytes32Count(ORDER_LIST).call()
+        if order_count == 0:
+            raise Exception("No orders found")
+
+        # Get the most recent order key
+        order_key = data_store.functions.getBytes32ValuesAt(ORDER_LIST, order_count - 1, order_count).call()[0]
+        print(f"Order created with key: {order_key.hex()}")
 
         # for key in keys:
         #     print(f"Key: {key.hex()}")
 
+        reader = get_reader_contract(config)
+        order_info = reader.functions.getOrder(data_store.address, order_key).call()
+        print(f"Order: {order_info}")
+
         # data_store_owner = "0xE7BfFf2aB721264887230037940490351700a068"
         controller = "0xf5F30B10141E1F63FC11eD772931A8294a591996"
         oracle_provider = "0x5d6B84086DA6d4B0b6C0dF7E02f8a6A039226530"
-        custom_oracle_provider = "0xA1D67424a5122d83831A14Fa5cB9764Aeb15CD99"
+        custom_oracle_provider = deployed_oracle_address  # "0xA1D67424a5122d83831A14Fa5cB9764Aeb15CD99"
         # NOTE: Somehow have to sign the oracle params by this bad boy
         oracle_signer = "0x0F711379095f2F0a6fdD1e8Fccd6eBA0833c1F1f"
         # set this value to true to pass the provider enabled check in contract
@@ -488,37 +643,29 @@ def main(rpc="http://localhost:8545"):
 
         assert value, "Value should be true"
 
-        #* Dynamically fetch the storage slot for the oracle provider
-        #? Get this value dynamically https://github.com/gmx-io/gmx-synthetics/blob/e8344b5086f67518ca8d33e88c6be0737f6ae4a4/contracts/data/Keys.sol#L938
-        #? Python ref: https://gist.github.com/Aviksaikat/cc69acb525695e44db340d64e9889f5e
+        # * Dynamically fetch the storage slot for the oracle provider
+        # ? Get this value dynamically https://github.com/gmx-io/gmx-synthetics/blob/e8344b5086f67518ca8d33e88c6be0737f6ae4a4/contracts/data/Keys.sol#L938
+        # ? Python ref: https://gist.github.com/Aviksaikat/cc69acb525695e44db340d64e9889f5e
         encoded_data = encode(["bytes32", "address"], [IS_ORACLE_PROVIDER_ENABLED, custom_oracle_provider])
         slot = f"0x{keccak(encoded_data).hex()}"
 
         # Enable the oracle provider
-        data_store.functions.setBool(
-        slot, True).transact(
-            {"from": controller})
-        is_oracle_provider_enabled: bool = data_store.functions.getBool(
-            slot
-        ).call()
+        data_store.functions.setBool(slot, True).transact({"from": controller})
+        is_oracle_provider_enabled: bool = data_store.functions.getBool(slot).call()
         print(f"Value: {is_oracle_provider_enabled}")
         assert is_oracle_provider_enabled, "Value should be true"
 
-
         # pass the test `address expectedProvider = dataStore.getAddress(Keys.oracleProviderForTokenKey(token));` in Oracle.sol#L278
-        data_store.functions.setAddress("0x74017d3837d8c7e3775331e2ed46f368cb3d0fdd145b947afb76d6049cd2c0fe", custom_oracle_provider).transact(
-            {"from": controller}
-        )
+        data_store.functions.setAddress(
+            "0x74017d3837d8c7e3775331e2ed46f368cb3d0fdd145b947afb76d6049cd2c0fe", custom_oracle_provider
+        ).transact({"from": controller})
 
         new_address = data_store.functions.getAddress(
             "0x74017d3837d8c7e3775331e2ed46f368cb3d0fdd145b947afb76d6049cd2c0fe"
         ).call()
         print(f"New address: {new_address}")
         # 0x0000000000000000000000005d6B84086DA6d4B0b6C0dF7E02f8a6A039226530
-        assert new_address == custom_oracle_provider, (
-            "New address should be the oracle provider"
-        )
-
+        assert new_address == custom_oracle_provider, "New address should be the oracle provider"
 
         # need this to be set to pass the `Oracle._validatePrices` check. Key taken from tenderly tx debugger
         address_key: str = "0xf986b0f912da0acadea6308636145bb2af568ddd07eb6c76b880b8f341fef306"  # "0xf986b0f912da0acadea6308636145bb2af568ddd07eb6c76b880b8f341fef306"
@@ -527,17 +674,17 @@ def main(rpc="http://localhost:8545"):
         value = data_store.functions.getAddress(address_key).call()
         print(f"Value: {value}")
         assert value == custom_oracle_provider, "Value should be recipient address"
-        
-        #? Set another key value to pass the test in `Oracle.sol` this time for ChainlinkDataStreamProvider
+
+        # ? Set another key value to pass the test in `Oracle.sol` this time for ChainlinkDataStreamProvider
         address_key: str = "0x659d3e479f4f2d295ea225e3d439a6b9d6fbf14a5cd4689e7d007fbab44acb8a"
         data_store.functions.setAddress(address_key, custom_oracle_provider).transact({"from": controller})
         value = data_store.functions.getAddress(address_key).call()
         print(f"Value: {value}")
         assert value == custom_oracle_provider, "Value should be recipient address"
 
-        #? Set the `maxRefPriceDeviationFactor` to pass tests in `Oracle.sol`
+        # ? Set the `maxRefPriceDeviationFactor` to pass tests in `Oracle.sol`
         price_deviation_factor_key: str = f"0x{MAX_ORACLE_REF_PRICE_DEVIATION_FACTOR.hex()}"
-        #* set some big value to pass the test
+        # * set some big value to pass the test
         large_value: int = 10021573904618365809021423188717
         data_store.functions.setUint(price_deviation_factor_key, large_value).transact({"from": controller})
         value = data_store.functions.getUint(price_deviation_factor_key).call()
@@ -549,7 +696,6 @@ def main(rpc="http://localhost:8545"):
         # # ETH PRICE
         # oracle_contract.functions.setPrimaryPrice(link_token_address, (2492652716024169, 2492891019455477)).transact({"from": controller})
 
-
         # print(f"Order key: {order_key.hex()}")
         overrides = {
             "simulate": False,
@@ -560,7 +706,7 @@ def main(rpc="http://localhost:8545"):
             # ],
         }
         # Execute the order with oracle prices
-        order.execute_order(order_key, overrides=overrides)
+        order.execute_order(order_key, deployed_oracle_address, overrides=overrides)
 
         # Check the balances after execution
         balance = link_contract.functions.balanceOf(recipient_address).call()
@@ -578,7 +724,7 @@ def main(rpc="http://localhost:8545"):
 
 
 if __name__ == "__main__":
-    from anvil_set import set_opt_code
+    # from anvil_set import set_opt_code
 
     # set_opt_code(JSON_RPC_BASE)
     main(JSON_RPC_BASE)
