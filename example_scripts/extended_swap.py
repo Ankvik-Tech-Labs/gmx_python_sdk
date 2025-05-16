@@ -439,7 +439,7 @@ def add_tenderly_balances():
 
 
 def deploy_custom_oracle(w3: Web3, account) -> str:
-    # /// TODO: Delpoy the `Oracle` contract here & then return the deployed bytecode
+    # /// Delpoy the `Oracle` contract here & then return the deployed bytecode
     # Check balance
     balance = w3.eth.get_balance(account.get_address())
     print(f"Deployer balance: {w3.from_wei(balance, 'ether')} ETH")
@@ -691,8 +691,10 @@ def main(rpc="http://localhost:8545"):
 
     target_balance_before = target_contract.functions.balanceOf(recipient_address).call()
     target_symbol = target_contract.functions.symbol().call()
+    target_decimals = target_contract.functions.decimals().call()
+
     # Convert both values to Decimal BEFORE division
-    balance_decimal = Decimal(str(target_balance_before)) / Decimal(10**decimals)
+    balance_decimal = Decimal(str(target_balance_before)) / Decimal(10**target_decimals)
 
     # Format to avoid scientific notation and show proper decimal places
     print(f"Recipient {TARGET_TOKEN_SYMBOL} balance before: {balance_decimal:.18f} {target_symbol}")
@@ -715,7 +717,7 @@ def main(rpc="http://localhost:8545"):
         "slippage_percent": 0.02,
     }
     # if we have already deployed then set the addres if not set to None
-    deployed: Optional[tuple[str]] = (None, None)  # (None, None)
+    deployed: Optional[tuple[str]] = ("0xe5079266f1eFe32c4BCf36D60F08b240f1B347de", None)  # (None, None)
     if not deployed[0]:
         deployed_oracle_address = deploy_custom_oracle_provider(w3, config.get_signer())
         custom_oracle_contract_address = deploy_custom_oracle(w3, config.get_signer())
@@ -750,9 +752,9 @@ def main(rpc="http://localhost:8545"):
 
         # print(f"Order LIST: {ORDER_LIST.hex()}")
 
-        assert (
-            ORDER_LIST.hex() == "0x86f7cfd5d8f8404e5145c91bebb8484657420159dabd0753d6a59f3de3f7b8c1"[2:]
-        ), "Order list mismatch"
+        assert ORDER_LIST.hex() == "0x86f7cfd5d8f8404e5145c91bebb8484657420159dabd0753d6a59f3de3f7b8c1"[2:], (
+            "Order list mismatch"
+        )
         order_count = data_store.functions.getBytes32Count(ORDER_LIST).call()
         if order_count == 0:
             raise Exception("No orders found")
@@ -801,13 +803,10 @@ def main(rpc="http://localhost:8545"):
 
         # TODO: This will change for various tokens apparently
         # pass the test `address expectedProvider = dataStore.getAddress(Keys.oracleProviderForTokenKey(token));` in Oracle.sol#L278
-        data_store.functions.setAddress(
-            "0x233a49594db4e7a962a8bd9ec7298b99d6464865065bd50d94232b61d213f16d", custom_oracle_provider
-        ).transact({"from": controller})
+        address_slot: str = "0x233a49594db4e7a962a8bd9ec7298b99d6464865065bd50d94232b61d213f16d"
+        data_store.functions.setAddress(address_slot, custom_oracle_provider).transact({"from": controller})
 
-        new_address = data_store.functions.getAddress(
-            "0x233a49594db4e7a962a8bd9ec7298b99d6464865065bd50d94232b61d213f16d"
-        ).call()
+        new_address = data_store.functions.getAddress(address_slot).call()
         print(f"New address: {new_address}")
         # 0x0000000000000000000000005d6B84086DA6d4B0b6C0dF7E02f8a6A039226530
         assert new_address == custom_oracle_provider, "New address should be the oracle provider"
@@ -873,11 +872,17 @@ def main(rpc="http://localhost:8545"):
         symbol = initial_token_contract.functions.symbol().call()
         print(f"Recipient {INITIAL_TOKEN_SYMBOL} balance after swap: {Decimal(balance / 10**decimals)} {symbol}")
 
-        balance = target_contract.functions.balanceOf(recipient_address).call()
+        target_balance_after = target_contract.functions.balanceOf(recipient_address).call()
         symbol = target_contract.functions.symbol().call()
-        print(f"Recipient {TARGET_TOKEN_SYMBOL} balance after swap: {Decimal(balance / 10**decimals)} {symbol}")
+        target_decimals = target_contract.functions.decimals().call()
 
-        print(f"Change in {TARGET_TOKEN_SYMBOL} balance: {(balance - target_balance_before) / 10**decimals}")
+        balance_decimal = Decimal(str(target_balance_after)) / Decimal(10**target_decimals)
+
+        # Format to avoid scientific notation and show proper decimal places
+        print(f"Recipient {TARGET_TOKEN_SYMBOL} balance after swap: {balance_decimal:.18f} {target_symbol}")
+        print(
+            f"Change in {TARGET_TOKEN_SYMBOL} balance: {Decimal((target_balance_after - target_balance_before) / 10**target_decimals):.18f}"
+        )
     except Exception as e:
         print(f"Error during swap process: {e!s}")
         raise e

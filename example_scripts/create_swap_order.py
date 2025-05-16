@@ -143,9 +143,9 @@ def main(rpc="http://localhost:8545"):
 
     print(f"Order LIST: {ORDER_LIST.hex()}")
 
-    assert (
-        ORDER_LIST.hex() == "0x86f7cfd5d8f8404e5145c91bebb8484657420159dabd0753d6a59f3de3f7b8c1"[2:]
-    ), "Order list mismatch"
+    assert ORDER_LIST.hex() == "0x86f7cfd5d8f8404e5145c91bebb8484657420159dabd0753d6a59f3de3f7b8c1"[2:], (
+        "Order list mismatch"
+    )
     keys = data_store.functions.getBytes32ValuesAt(ORDER_LIST, 0, 20).call()
     # print(f"Key: {keys}")
 
