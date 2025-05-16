@@ -315,23 +315,38 @@ def execute_deposit_feature_disabled_key(contract: str) -> HexBytes:
 
 
 def create_order_feature_disabled_key(contract: str, order_type: int) -> HexBytes:
-    return hash_data(["bytes32", "address", "uint256"], [CREATE_ORDER_FEATURE_DISABLED, contract, order_type])
+    return hash_data(
+        ["bytes32", "address", "uint256"],
+        [CREATE_ORDER_FEATURE_DISABLED, contract, order_type],
+    )
 
 
 def execute_order_feature_disabled_key(contract: str, order_type: int) -> HexBytes:
-    return hash_data(["bytes32", "address", "uint256"], [EXECUTE_ORDER_FEATURE_DISABLED, contract, order_type])
+    return hash_data(
+        ["bytes32", "address", "uint256"],
+        [EXECUTE_ORDER_FEATURE_DISABLED, contract, order_type],
+    )
 
 
 def execute_adl_feature_disabled_key(contract: str, order_type: int) -> HexBytes:
-    return hash_data(["bytes32", "address", "uint256"], [EXECUTE_ADL_FEATURE_DISABLED, contract, order_type])
+    return hash_data(
+        ["bytes32", "address", "uint256"],
+        [EXECUTE_ADL_FEATURE_DISABLED, contract, order_type],
+    )
 
 
 def update_order_feature_disabled_key(contract: str, order_type: int) -> HexBytes:
-    return hash_data(["bytes32", "address", "uint256"], [UPDATE_ORDER_FEATURE_DISABLED, contract, order_type])
+    return hash_data(
+        ["bytes32", "address", "uint256"],
+        [UPDATE_ORDER_FEATURE_DISABLED, contract, order_type],
+    )
 
 
 def cancel_order_feature_disabled_key(contract: str, order_type: int) -> HexBytes:
-    return hash_data(["bytes32", "address", "uint256"], [CANCEL_ORDER_FEATURE_DISABLED, contract, order_type])
+    return hash_data(
+        ["bytes32", "address", "uint256"],
+        [CANCEL_ORDER_FEATURE_DISABLED, contract, order_type],
+    )
 
 
 def claimable_fee_amount_key(market: str, token: str) -> HexBytes:
@@ -339,7 +354,10 @@ def claimable_fee_amount_key(market: str, token: str) -> HexBytes:
 
 
 def claimable_funding_amount_key(market: str, token: str, account: str) -> HexBytes:
-    return hash_data(["bytes32", "address", "address", "address"], [CLAIMABLE_FUNDING_AMOUNT, market, token, account])
+    return hash_data(
+        ["bytes32", "address", "address", "address"],
+        [CLAIMABLE_FUNDING_AMOUNT, market, token, account],
+    )
 
 
 def claimable_collateral_amount_key(market: str, token: str, time_key: int, account: str) -> HexBytes:
@@ -351,7 +369,8 @@ def claimable_collateral_amount_key(market: str, token: str, time_key: int, acco
 
 def claimable_collateral_factor_key(market: str, token: str, time_key: int) -> HexBytes:
     return hash_data(
-        ["bytes32", "address", "address", "uint256"], [CLAIMABLE_COLLATERAL_FACTOR, market, token, time_key]
+        ["bytes32", "address", "address", "uint256"],
+        [CLAIMABLE_COLLATERAL_FACTOR, market, token, time_key],
     )
 
 
@@ -364,12 +383,16 @@ def claimable_collateral_factor_for_account_key(market: str, token: str, time_ke
 
 def claimable_ui_fee_amount_key(market: str, token: str, ui_fee_receiver: str) -> HexBytes:
     return hash_data(
-        ["bytes32", "address", "address", "address"], [CLAIMABLE_UI_FEE_AMOUNT, market, token, ui_fee_receiver]
+        ["bytes32", "address", "address", "address"],
+        [CLAIMABLE_UI_FEE_AMOUNT, market, token, ui_fee_receiver],
     )
 
 
 def affiliate_reward_key(market: str, token: str, account: str) -> HexBytes:
-    return hash_data(["bytes32", "address", "address", "address"], [AFFILIATE_REWARD, market, token, account])
+    return hash_data(
+        ["bytes32", "address", "address", "address"],
+        [AFFILIATE_REWARD, market, token, account],
+    )
 
 
 def min_affiliate_reward_factor_key(referral_tier_level: int) -> HexBytes:
@@ -413,7 +436,10 @@ def oracle_type_key(token: str) -> HexBytes:
 
 
 def oracle_timestamp_adjustment_key(provider: str, token: str) -> HexBytes:
-    return hash_data(["bytes32", "address", "address"], [ORACLE_TIMESTAMP_ADJUSTMENT, provider, token])
+    return hash_data(
+        ["bytes32", "address", "address"],
+        [ORACLE_TIMESTAMP_ADJUSTMENT, provider, token],
+    )
 
 
 def oracle_provider_for_token_key(token: str) -> HexBytes:
@@ -421,12 +447,16 @@ def oracle_provider_for_token_key(token: str) -> HexBytes:
 
 
 def open_interest_key(market: str, collateral_token: str, is_long: bool) -> HexBytes:
-    return hash_data(["bytes32", "address", "address", "bool"], [OPEN_INTEREST, market, collateral_token, is_long])
+    return hash_data(
+        ["bytes32", "address", "address", "bool"],
+        [OPEN_INTEREST, market, collateral_token, is_long],
+    )
 
 
 def open_interest_in_tokens_key(market: str, collateral_token: str, is_long: bool) -> HexBytes:
     return hash_data(
-        ["bytes32", "address", "address", "bool"], [OPEN_INTEREST_IN_TOKENS, market, collateral_token, is_long]
+        ["bytes32", "address", "address", "bool"],
+        [OPEN_INTEREST_IN_TOKENS, market, collateral_token, is_long],
     )
 
 
@@ -444,7 +474,8 @@ def min_collateral_factor_key(market: str) -> HexBytes:
 
 def min_collateral_factor_for_open_interest_multiplier_key(market: str, is_long: bool) -> HexBytes:
     return hash_data(
-        ["bytes32", "address", "bool"], [MIN_COLLATERAL_FACTOR_FOR_OPEN_INTEREST_MULTIPLIER, market, is_long]
+        ["bytes32", "address", "bool"],
+        [MIN_COLLATERAL_FACTOR_FOR_OPEN_INTEREST_MULTIPLIER, market, is_long],
     )
 
 
@@ -457,7 +488,10 @@ def open_interest_reserve_factor_key(market: str, is_long: bool) -> HexBytes:
 
 
 def max_pnl_factor_key(pnl_factor_type: str, market: str, is_long: bool) -> HexBytes:
-    return hash_data(["bytes32", "bytes32", "address", "bool"], [MAX_PNL_FACTOR, pnl_factor_type, market, is_long])
+    return hash_data(
+        ["bytes32", "bytes32", "address", "bool"],
+        [MAX_PNL_FACTOR, pnl_factor_type, market, is_long],
+    )
 
 
 def min_pnl_factor_after_adl(market: str, is_long: bool) -> HexBytes:
@@ -465,7 +499,10 @@ def min_pnl_factor_after_adl(market: str, is_long: bool) -> HexBytes:
 
 
 def collateral_sum_key(market: str, collateral_token: str, is_long: bool) -> HexBytes:
-    return hash_data(["bytes32", "address", "address", "bool"], [COLLATERAL_SUM, market, collateral_token, is_long])
+    return hash_data(
+        ["bytes32", "address", "address", "bool"],
+        [COLLATERAL_SUM, market, collateral_token, is_long],
+    )
 
 
 def pool_amount_key(market: str, token: str) -> HexBytes:
@@ -509,11 +546,17 @@ def swap_fee_factor_key(market: str, for_positive_impact: bool) -> HexBytes:
 
 
 def deposit_fee_factor_key(market: str, for_positive_impact: bool) -> HexBytes:
-    return hash_data(["bytes32", "address", "bool"], [DEPOSIT_FEE_FACTOR, market, for_positive_impact])
+    return hash_data(
+        ["bytes32", "address", "bool"],
+        [DEPOSIT_FEE_FACTOR, market, for_positive_impact],
+    )
 
 
 def withdrawal_fee_factor_key(market: str, for_positive_impact: bool) -> HexBytes:
-    return hash_data(["bytes32", "address", "bool"], [WITHDRAWAL_FEE_FACTOR, market, for_positive_impact])
+    return hash_data(
+        ["bytes32", "address", "bool"],
+        [WITHDRAWAL_FEE_FACTOR, market, for_positive_impact],
+    )
 
 
 def atomic_swap_fee_factor_key(market: str) -> HexBytes:
@@ -537,7 +580,10 @@ def position_impact_exponent_factor_key(market: str) -> HexBytes:
 
 
 def max_position_impact_factor_key(market: str, is_positive: bool) -> HexBytes:
-    return hash_data(["bytes32", "address", "bool"], [MAX_POSITION_IMPACT_FACTOR, market, is_positive])
+    return hash_data(
+        ["bytes32", "address", "bool"],
+        [MAX_POSITION_IMPACT_FACTOR, market, is_positive],
+    )
 
 
 def max_position_impact_factor_for_liquidations_key(market: str) -> HexBytes:
@@ -545,7 +591,10 @@ def max_position_impact_factor_for_liquidations_key(market: str) -> HexBytes:
 
 
 def position_fee_factor_key(market: str, for_positive_impact: bool) -> HexBytes:
-    return hash_data(["bytes32", "address", "bool"], [POSITION_FEE_FACTOR, market, for_positive_impact])
+    return hash_data(
+        ["bytes32", "address", "bool"],
+        [POSITION_FEE_FACTOR, market, for_positive_impact],
+    )
 
 
 def pro_trader_tier_key(account: str) -> HexBytes:
@@ -606,7 +655,8 @@ def threshold_for_decrease_funding_key(market: str) -> HexBytes:
 
 def funding_fee_amount_per_size_key(market: str, collateral_token: str, is_long: bool) -> HexBytes:
     return hash_data(
-        ["bytes32", "address", "address", "bool"], [FUNDING_FEE_AMOUNT_PER_SIZE, market, collateral_token, is_long]
+        ["bytes32", "address", "address", "bool"],
+        [FUNDING_FEE_AMOUNT_PER_SIZE, market, collateral_token, is_long],
     )
 
 
@@ -678,7 +728,10 @@ def cumulative_borrowing_factor_key(market: str, is_long: bool) -> HexBytes:
 
 
 def cumulative_borrowing_factor_updated_at_key(market: str, is_long: bool) -> HexBytes:
-    return hash_data(["bytes32", "address", "bool"], [CUMULATIVE_BORROWING_FACTOR_UPDATED_AT, market, is_long])
+    return hash_data(
+        ["bytes32", "address", "bool"],
+        [CUMULATIVE_BORROWING_FACTOR_UPDATED_AT, market, is_long],
+    )
 
 
 def virtual_token_id_key(token: str) -> HexBytes:
@@ -690,7 +743,10 @@ def virtual_market_id_key(market: str) -> HexBytes:
 
 
 def virtual_inventory_for_swaps_key(virtual_market_id: str, is_long_token: bool) -> HexBytes:
-    return hash_data(["bytes32", "bytes32", "bool"], [VIRTUAL_INVENTORY_FOR_SWAPS, virtual_market_id, is_long_token])
+    return hash_data(
+        ["bytes32", "bytes32", "bool"],
+        [VIRTUAL_INVENTORY_FOR_SWAPS, virtual_market_id, is_long_token],
+    )
 
 
 def virtual_inventory_for_positions_key(virtual_token_id: str) -> HexBytes:
@@ -706,18 +762,23 @@ def max_allowed_subaccount_action_count_key(account: str, subaccount: str, actio
 
 def subaccount_expires_at_key(account: str, subaccount: str, action_type: str) -> HexBytes:
     return hash_data(
-        ["bytes32", "address", "address", "bytes32"], [SUBACCOUNT_EXPIRES_AT, account, subaccount, action_type]
+        ["bytes32", "address", "address", "bytes32"],
+        [SUBACCOUNT_EXPIRES_AT, account, subaccount, action_type],
     )
 
 
 def subaccount_action_count_key(account: str, subaccount: str, action_type: str) -> HexBytes:
     return hash_data(
-        ["bytes32", "address", "address", "bytes32"], [SUBACCOUNT_ACTION_COUNT, account, subaccount, action_type]
+        ["bytes32", "address", "address", "bytes32"],
+        [SUBACCOUNT_ACTION_COUNT, account, subaccount, action_type],
     )
 
 
 def subaccount_auto_top_up_amount_key(account: str, subaccount: str) -> HexBytes:
-    return hash_data(["bytes32", "address", "address"], [SUBACCOUNT_AUTO_TOP_UP_AMOUNT, account, subaccount])
+    return hash_data(
+        ["bytes32", "address", "address"],
+        [SUBACCOUNT_AUTO_TOP_UP_AMOUNT, account, subaccount],
+    )
 
 
 def glv_supported_market_list_key(glv: str) -> HexBytes:
@@ -737,11 +798,17 @@ def account_glv_withdrawal_list_key(account: str) -> HexBytes:
 
 
 def glv_max_market_token_balance_usd_key(glv: str, market: str) -> HexBytes:
-    return hash_data(["bytes32", "address", "address"], [GLV_MAX_MARKET_TOKEN_BALANCE_USD, glv, market])
+    return hash_data(
+        ["bytes32", "address", "address"],
+        [GLV_MAX_MARKET_TOKEN_BALANCE_USD, glv, market],
+    )
 
 
 def glv_max_market_token_balance_amount_key(glv: str, market: str) -> HexBytes:
-    return hash_data(["bytes32", "address", "address"], [GLV_MAX_MARKET_TOKEN_BALANCE_AMOUNT, glv, market])
+    return hash_data(
+        ["bytes32", "address", "address"],
+        [GLV_MAX_MARKET_TOKEN_BALANCE_AMOUNT, glv, market],
+    )
 
 
 def glv_shift_min_interval_key(glv: str) -> HexBytes:
@@ -769,7 +836,10 @@ def sync_config_parameter_disabled_key(parameter: str) -> HexBytes:
 
 
 def sync_config_market_parameter_disabled_key(market: str, parameter: str) -> HexBytes:
-    return hash_data(["bytes32", "address", "string"], [SYNC_CONFIG_MARKET_PARAMETER_DISABLED, market, parameter])
+    return hash_data(
+        ["bytes32", "address", "string"],
+        [SYNC_CONFIG_MARKET_PARAMETER_DISABLED, market, parameter],
+    )
 
 
 def sync_config_update_completed_key(update_id: int) -> HexBytes:
@@ -785,7 +855,10 @@ def buyback_batch_amount_key(token: str) -> HexBytes:
 
 
 def buyback_available_fee_amount_key(fee_token: str, swap_token: str) -> HexBytes:
-    return hash_data(["bytes32", "address", "address"], [BUYBACK_AVAILABLE_FEE_AMOUNT, fee_token, swap_token])
+    return hash_data(
+        ["bytes32", "address", "address"],
+        [BUYBACK_AVAILABLE_FEE_AMOUNT, fee_token, swap_token],
+    )
 
 
 def buyback_gmx_factor_key(version: int) -> HexBytes:

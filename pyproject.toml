@@ -22,6 +22,7 @@ license = "MIT"
 [tool.poetry.group.dev.dependencies]
 dotenv = "^0.9.9"
 rich = "^14.0.0"
+ipython = "8.19"
 
 [tool.setuptools.packages.find]
 include = ["gmx_python_sdk", "gmx_python_sdk.*"]

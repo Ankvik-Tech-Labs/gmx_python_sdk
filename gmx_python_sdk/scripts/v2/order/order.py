@@ -17,7 +17,10 @@ from ..gmx_utils import (
     create_connection,
 )
 from ..gmx_utils import decrease_position_swap_type as decrease_position_swap_types
-from ..gmx_utils import get_exchange_router_contract, get_execution_price_and_price_impact
+from ..gmx_utils import (
+    get_exchange_router_contract,
+    get_execution_price_and_price_impact,
+)
 from ..gmx_utils import order_type as order_types
 
 is_newer_version, version = check_web3_correct_version()

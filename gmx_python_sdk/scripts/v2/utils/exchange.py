@@ -4,6 +4,7 @@ from typing import Any
 from gmx_python_sdk.scripts.v2.gmx_utils import get_contract_object
 from gmx_python_sdk.scripts.v2.utils.oracle import (
     get_oracle_params,
+    get_oracle_params_for_custom_oracle,
     get_oracle_params_for_simulation,
     TOKEN_ORACLE_TYPES,
 )
@@ -73,7 +74,7 @@ def get_execute_params(fixture, params: dict[str, Any]) -> dict[str, list]:
     return result_params
 
 
-def execute_with_oracle_params(fixture, overrides: dict, config) -> Any:
+def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle_address) -> Any:
     """
     Execute a transaction with oracle parameters
 
@@ -218,8 +219,12 @@ def execute_with_oracle_params(fixture, overrides: dict, config) -> Any:
         controller_address = "0xb6d37DFCdA9c237ca98215f9154Dc414EFe0aC1b"
         # Get full oracle parameters for execution
         print(f"Args for oracle params: {args}")
-        oracle_params = get_oracle_params(
-            config=config, keeper_address=keeper_address, controller_address=controller_address, **args
+        oracle_params = get_oracle_params_for_custom_oracle(
+            config=config,
+            keeper_address=keeper_address,
+            controller_address=controller_address,
+            deployed_oracle_address=deployed_oracle_address,
+            **args,
         )
 
         logging.info(f"Key: {key}")
@@ -233,13 +238,38 @@ def execute_with_oracle_params(fixture, overrides: dict, config) -> Any:
         active_signer = signers[0]
         nonce = web3_provider.eth.get_transaction_count(keeper_address)
 
+        controller = "0xf5F30B10141E1F63FC11eD772931A8294a591996"
+        oracle_contract = get_contract_object(config.get_web3_connection(), "oracle", config.chain)
+        # * clear the price first
+        # oracle_contract.functions.clearAllPrices().transact({"from": controller})
+        # ETH PRICE. WETH address: 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1
+        # oracle_contract.functions.setPrimaryPrice(
+        #     "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", (2505849875000000, 2505989682807298)
+        # ).transact({"from": controller})
+
+        # LINK price
+        # NOTE: address, (min_price, max_price)
+        # oracle_contract.functions.setPrimaryPrice(
+        #     "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4", (16364090000000, 16373342000000)
+        # ).transact({"from": controller})
+
+        # USDC Price
+        # oracle_contract.functions.setPrimaryPrice(
+        #     "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", (999923135340409600000000, 1000053137654175000000000)
+        # ).transact({"from": controller})
+
+        # # SOL price
+        # oracle_contract.functions.setPrimaryPrice(
+        #     "0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07", (170177872499118025000000, 170192030000000000000000)
+        # ).transact({"from": controller})
+
         # Build the transaction
         transaction = order_handler.functions.executeOrder(key, oracle_params).build_transaction(
             {
                 "from": keeper_address,  # to_checksum_address(active_signer.get_address()),
                 "nonce": nonce,
-                "gas": 80000000,  # Set appropriate gas limit
-                "maxFeePerGas": web3_provider.eth.gas_price * 2,  # Adjust as needed
+                "gas": 90000000,  # Set appropriate gas limit
+                "maxFeePerGas": web3_provider.eth.gas_price * 200,  # Adjust as needed
                 "maxPriorityFeePerGas": web3_provider.eth.gas_price // 10,  # Adjust as needed
             }
         )

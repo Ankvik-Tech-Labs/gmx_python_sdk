@@ -198,7 +198,8 @@ def format_amount(
 
     # Convert from wei to eth-like units
     amount_str = Web3.from_wei(
-        int(amount), "ether" if token_decimals == 18 else "lovelace" if token_decimals == 6 else "gwei"
+        int(amount),
+        ("ether" if token_decimals == 18 else "lovelace" if token_decimals == 6 else "gwei"),
     )
 
     # If we need further precision adjustment

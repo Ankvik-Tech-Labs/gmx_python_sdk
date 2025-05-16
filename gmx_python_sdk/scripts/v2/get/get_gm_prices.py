@@ -4,7 +4,11 @@ from ..gmx_utils import (
     save_csv_to_datastore,
     save_json_file_to_datastore,
 )
-from ..keys import MAX_PNL_FACTOR_FOR_DEPOSITS, MAX_PNL_FACTOR_FOR_TRADERS, MAX_PNL_FACTOR_FOR_WITHDRAWALS
+from ..keys import (
+    MAX_PNL_FACTOR_FOR_DEPOSITS,
+    MAX_PNL_FACTOR_FOR_TRADERS,
+    MAX_PNL_FACTOR_FOR_WITHDRAWALS,
+)
 from .get import GetData
 
 

@@ -89,6 +89,10 @@ contract_map = {
             "contract_address": "0xfc9Bc118fdDb89FF6fF720840446D73478dE4153",
             "abi_path": "contracts/arbitrum/orderhandler.json",
         },
+        "oracle": {
+            "contract_address": "0x918b60bA71bAdfaDA72EF3A6C6F71d0C41D4785C",
+            "abi_path": "contracts/arbitrum/oracle.json",
+        },
     },
     "avalanche": {
         "datastore": {

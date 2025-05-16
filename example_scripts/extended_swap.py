@@ -1,7 +1,10 @@
+from decimal import Decimal
 import json
-from os import link
 from pathlib import Path
 from typing import Optional
+
+import requests
+from example_scripts.anvil_set import set_opt_code
 from gmx_python_sdk.scripts.v2.order import deposit
 from gmx_python_sdk.scripts.v2.utils.exchange import execute_with_oracle_params
 from gmx_python_sdk.scripts.v2.utils.hash_utils import hash_data
@@ -34,7 +37,20 @@ from eth_utils import keccak
 
 import time
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/b92017e6-4de9-40bc-b8d7-498df9a1e9c5"
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/9629f1ed-91de-4e98-8766-331183137a1f"
+TOKENS: dict[str] = {
+    "USDC": to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831"),
+    "SOL": to_checksum_address("0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07"),
+    "ARB": to_checksum_address("0x912ce59144191c1204e64559fe8253a0e49e6548"),
+    "LINK": to_checksum_address("0xf97f4df75117a78c1A5a0DBb814Af92458539FB4"),
+}
+
+INITIAL_TOKEN_SYMBOL: str = "ARB"
+TARGET_TOKEN_SYMBOL: str = "SOL"
+
+inital_token_address: str = TOKENS[INITIAL_TOKEN_SYMBOL]
+target_token_address: str = TOKENS[TARGET_TOKEN_SYMBOL]
+
 
 # Create the ORDER_LIST key directly
 ORDER_LIST = create_hash_string("ORDER_LIST")
@@ -174,11 +190,10 @@ class EnhancedSwapOrder(SwapOrder):
         tokens = overrides.get(
             "tokens",
             [
-                to_checksum_address("0xf97f4df75117a78c1a5a0dbb814af92458539fb4"),  # LINK on Arbitrum
-                to_checksum_address("0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07"),  # SOL on Arbitrum
+                inital_token_address,
+                target_token_address,
             ],
         )
-        # TODO: Trace a full successfull workflow of `executeOrder` method to understand signer indexe
 
         # Fetch real-time prices
         oracle_prices = OraclePrices(chain=self.config.chain).get_recent_prices()
@@ -368,7 +383,63 @@ class EnhancedSwapOrder(SwapOrder):
 
 GMX_ADMIN = "0x7A967D114B8676874FA2cFC1C14F3095C88418Eb"
 
+
+def add_tenderly_balances():
+    """
+    Adds both ETH and ERC20 token balances to a specific address on a Tenderly fork.
+    This function will execute both operations automatically when this script is run.
+    """
+    # Common configuration for both operations
+    tenderly_url = JSON_RPC_BASE
+    address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    headers = {"Content-Type": "application/json"}
+
+    print("Starting Tenderly balance operations...")
+
+    # Step 1: Add ETH balance
+    eth_amount = "0xa3123b753e1e780000000"
+    eth_payload = {"id": 2, "jsonrpc": "2.0", "method": "tenderly_addBalance", "params": [[address], eth_amount]}
+
+    try:
+        print(f"Adding ETH balance of {eth_amount} to {address}...")
+        eth_response = requests.post(tenderly_url, headers=headers, data=json.dumps(eth_payload))
+        eth_result = eth_response.json()
+
+        if "error" in eth_result:
+            print(f"Error adding ETH balance: {eth_result['error']}")
+        else:
+            print(f"Successfully added ETH balance. Response: {eth_result}")
+    except Exception as e:
+        print(f"Exception occurred while adding ETH balance: {e}")
+
+    # Step 2: Add ERC20 token balance
+    token_address = "0x912ce59144191c1204e64559fe8253a0e49e6548"
+    token_amount = "0x1566336316561e0000000000000000"
+
+    erc20_payload = {
+        "id": 3,
+        "jsonrpc": "2.0",
+        "method": "tenderly_addErc20Balance",
+        "params": [token_address, [address], token_amount],
+    }
+
+    try:
+        print(f"Adding ERC20 balance of {token_amount} for token {token_address} to {address}...")
+        erc20_response = requests.post(tenderly_url, headers=headers, data=json.dumps(erc20_payload))
+        erc20_result = erc20_response.json()
+
+        if "error" in erc20_result:
+            print(f"Error adding ERC20 balance: {erc20_result['error']}")
+        else:
+            print(f"Successfully added ERC20 balance. Response: {erc20_result}")
+    except Exception as e:
+        print(f"Exception occurred while adding ERC20 balance: {e}")
+
+    print("Tenderly balance operations completed.")
+
+
 def deploy_custom_oracle(w3: Web3, account) -> str:
+    # /// TODO: Delpoy the `Oracle` contract here & then return the deployed bytecode
     # Check balance
     balance = w3.eth.get_balance(account.get_address())
     print(f"Deployer balance: {w3.from_wei(balance, 'ether')} ETH")
@@ -421,10 +492,10 @@ def deploy_custom_oracle(w3: Web3, account) -> str:
     print(f"📦 On-chain code size (bytes): {len(code) // 2}")
 
     # List contract methods
-    methods = [func for func in deployed_contract.functions]
-    print("🔧 Available contract methods:")
-    for method in methods:
-        print(f"   - {method}")
+    # methods = [func for func in deployed_contract.functions]
+    # print("🔧 Available contract methods:")
+    # for method in methods:
+    #     print(f"   - {method}")
 
     # Verify constructor-stored state
     role_store_address = deployed_contract.functions.roleStore().call()
@@ -434,8 +505,14 @@ def deploy_custom_oracle(w3: Web3, account) -> str:
     print(f"📌 roleStore address: {role_store_address}")
     print(f"📌 dataStore address: {data_store_address}")
     print(f"📌 eventEmitter address: {event_emitter_address}")
+    bytecode = w3.eth.get_code(contract_address)
+
+    original_oracle_contract = to_checksum_address("0x918b60ba71badfada72ef3a6c6f71d0c41d4785c")
+
+    set_opt_code(JSON_RPC_BASE, bytecode, original_oracle_contract)
 
     return contract_address
+
 
 def deploy_custom_oracle_provider(w3: Web3, account) -> str:
     # Check balance
@@ -489,10 +566,10 @@ def deploy_custom_oracle_provider(w3: Web3, account) -> str:
     print(f"📦 On-chain code size (bytes): {len(code) // 2}")
 
     # List contract methods
-    methods = [func for func in deployed_contract.functions]
-    print("🔧 Available contract methods:")
-    for method in methods:
-        print(f"   - {method}")
+    # methods = [func for func in deployed_contract.functions]
+    # print("🔧 Available contract methods:")
+    # for method in methods:
+    #     print(f"   - {method}")
 
     # Verify constructor-stored state
     role_store_address = deployed_contract.functions.roleStore().call()
@@ -504,15 +581,67 @@ def deploy_custom_oracle_provider(w3: Web3, account) -> str:
     return contract_address
 
 
+def override_storage_slot(
+    contract_address: str,
+    slot: str = "0x636d2c90aa7802b40e3b1937e91c5450211eefbc7d3e39192aeb14ee03e3a958",
+    value: int = 171323136489203020000000,
+    web3: Web3 = None,
+) -> dict:
+    """
+    Override a storage slot in an Anvil fork.
+
+    Args:
+        contract_address: The address of the contract
+        slot: The storage slot to override (as a hex string)
+        value: The value to set (as an integer)
+        anvil_url: URL of the Anvil node
+    """
+
+    # Check connection
+    if not web3.is_connected():
+        raise Exception(f"Could not connect to Anvil node at {web3.provider.endpoint_uri}")
+
+    # Format the value to a 32-byte hex string with '0x' prefix
+    # First convert to hex without '0x'
+    hex_value = hex(value)[2:]
+
+    # Pad to 64 characters (32 bytes) and add '0x' prefix
+    padded_hex_value = "0x" + hex_value.zfill(64)
+
+    # Make sure the slot has '0x' prefix
+    if not slot.startswith("0x"):
+        slot = "0x" + slot
+
+    # Ensure contract address has '0x' prefix and is checksummed
+    if not contract_address.startswith("0x"):
+        contract_address = "0x" + contract_address
+
+    contract_address = web3.to_checksum_address(contract_address)
+
+    # Call the anvil_setStorageAt RPC method
+    result = web3.provider.make_request("tenderly_setStorageAt", [contract_address, slot, padded_hex_value])
+
+    # Check for errors
+    if "error" in result:
+        raise Exception(f"Error setting storage: {result['error']}")
+
+    print(f"Successfully set storage at slot {slot} to {padded_hex_value}")
+
+    storage_value = web3.eth.get_storage_at(contract_address, slot)
+    print(f"Verified value: {storage_value.hex()}")
+
+    return result
+
+
 def main(rpc="http://localhost:8545"):
     w3 = Web3(Web3.HTTPProvider(rpc))
     print(f"Connected to Arbitrum with chain ID: {w3.eth.chain_id}")
+    # add_tenderly_balances()
 
     # Addresses
     whale_address = "0xD7a827FBaf38c98E8336C5658E4BcbCD20a4fd2d"
     recipient_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-    link_token_address = "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4"  # LINK token contract
-    target_address = to_checksum_address("0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07")  # SOL
+    # link_token_address = "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4"  # LINK token contract
 
     erc20_abi = [
         {
@@ -539,19 +668,34 @@ def main(rpc="http://localhost:8545"):
             "outputs": [{"name": "", "type": "uint8"}],
             "type": "function",
         },
+        {
+            "constant": True,
+            "inputs": [],
+            "name": "symbol",
+            "outputs": [{"name": "", "type": "string"}],
+            "payable": False,
+            "stateMutability": "view",
+            "type": "function",
+        },
     ]
 
-    link_contract = w3.eth.contract(address=link_token_address, abi=erc20_abi)
-    target_contract = w3.eth.contract(address=target_address, abi=erc20_abi)
+    initial_token_contract = w3.eth.contract(address=inital_token_address, abi=erc20_abi)
+    target_contract = w3.eth.contract(address=target_token_address, abi=erc20_abi)
 
-    decimals = link_contract.functions.decimals().call()
+    decimals = initial_token_contract.functions.decimals().call()
+    symbol = initial_token_contract.functions.symbol().call()
 
     # Check initial balances
-    balance = link_contract.functions.balanceOf(recipient_address).call()
-    print(f"Recipient LINK balance: {balance / (10**decimals)}")
+    balance = initial_token_contract.functions.balanceOf(recipient_address).call()
+    print(f"Recipient {INITIAL_TOKEN_SYMBOL} balance: {Decimal(balance / 10**decimals)} {symbol}")
 
-    sol_balance_before = target_contract.functions.balanceOf(recipient_address).call()
-    print(f"Recipient SOL balance before: {sol_balance_before / 10**decimals}")
+    target_balance_before = target_contract.functions.balanceOf(recipient_address).call()
+    target_symbol = target_contract.functions.symbol().call()
+    # Convert both values to Decimal BEFORE division
+    balance_decimal = Decimal(str(target_balance_before)) / Decimal(10**decimals)
+
+    # Format to avoid scientific notation and show proper decimal places
+    print(f"Recipient {TARGET_TOKEN_SYMBOL} balance before: {balance_decimal:.18f} {target_symbol}")
 
     # GMX config
     config = ConfigManager(chain="arbitrum")
@@ -563,15 +707,15 @@ def main(rpc="http://localhost:8545"):
 
     parameters = {
         "chain": "arbitrum",
-        "out_token_symbol": "SOL",
-        "start_token_symbol": "LINK",
+        "out_token_symbol": TARGET_TOKEN_SYMBOL,
+        "start_token_symbol": INITIAL_TOKEN_SYMBOL,
         "is_long": False,
         "size_delta_usd": 0,
-        "initial_collateral_delta": 10000.000001,
+        "initial_collateral_delta": 50000.3785643,
         "slippage_percent": 0.02,
     }
     # if we have already deployed then set the addres if not set to None
-    deployed: Optional[tuple[str]] = (None, None) # (None, None)
+    deployed: Optional[tuple[str]] = (None, None)  # (None, None)
     if not deployed[0]:
         deployed_oracle_address = deploy_custom_oracle_provider(w3, config.get_signer())
         custom_oracle_contract_address = deploy_custom_oracle(w3, config.get_signer())
@@ -606,9 +750,9 @@ def main(rpc="http://localhost:8545"):
 
         # print(f"Order LIST: {ORDER_LIST.hex()}")
 
-        assert ORDER_LIST.hex() == "0x86f7cfd5d8f8404e5145c91bebb8484657420159dabd0753d6a59f3de3f7b8c1"[2:], (
-            "Order list mismatch"
-        )
+        assert (
+            ORDER_LIST.hex() == "0x86f7cfd5d8f8404e5145c91bebb8484657420159dabd0753d6a59f3de3f7b8c1"[2:]
+        ), "Order list mismatch"
         order_count = data_store.functions.getBytes32Count(ORDER_LIST).call()
         if order_count == 0:
             raise Exception("No orders found")
@@ -655,13 +799,14 @@ def main(rpc="http://localhost:8545"):
         print(f"Value: {is_oracle_provider_enabled}")
         assert is_oracle_provider_enabled, "Value should be true"
 
+        # TODO: This will change for various tokens apparently
         # pass the test `address expectedProvider = dataStore.getAddress(Keys.oracleProviderForTokenKey(token));` in Oracle.sol#L278
         data_store.functions.setAddress(
-            "0x74017d3837d8c7e3775331e2ed46f368cb3d0fdd145b947afb76d6049cd2c0fe", custom_oracle_provider
+            "0x233a49594db4e7a962a8bd9ec7298b99d6464865065bd50d94232b61d213f16d", custom_oracle_provider
         ).transact({"from": controller})
 
         new_address = data_store.functions.getAddress(
-            "0x74017d3837d8c7e3775331e2ed46f368cb3d0fdd145b947afb76d6049cd2c0fe"
+            "0x233a49594db4e7a962a8bd9ec7298b99d6464865065bd50d94232b61d213f16d"
         ).call()
         print(f"New address: {new_address}")
         # 0x0000000000000000000000005d6B84086DA6d4B0b6C0dF7E02f8a6A039226530
@@ -691,6 +836,21 @@ def main(rpc="http://localhost:8545"):
         print(f"Value: {value}")
         assert value == large_value, f"Value should be {large_value}"
 
+        oracle_contract: str = "0x918b60ba71badfada72ef3a6c6f71d0c41d4785c"
+        token_b_max_value_slot: str = "0x636d2c90aa7802b40e3b1937e91c5450211eefbc7d3e39192aeb14ee03e3a958"
+        token_b_min_value_slot: str = "0x636d2c90aa7802b40e3b1937e91c5450211eefbc7d3e39192aeb14ee03e3a959"
+
+        oracle_prices = OraclePrices(chain=parameters["chain"]).get_recent_prices()
+
+        max_price: int = int(oracle_prices[TOKENS[TARGET_TOKEN_SYMBOL]]["maxPriceFull"])
+        min_price: int = int(oracle_prices[TOKENS[TARGET_TOKEN_SYMBOL]]["minPriceFull"])
+        max_res = override_storage_slot(oracle_contract, token_b_max_value_slot, max_price, w3)
+        min_res = override_storage_slot(oracle_contract, token_b_min_value_slot, min_price, w3)
+        print(f"Max price: {max_price}")
+        print(f"Min price: {min_price}")
+        print(f"Max res: {max_res}")
+        print(f"Min res: {min_res}")
+
         # # ! Can't do it here
         # oracle_contract = get_contract_object(config.get_web3_connection(), "oracle", config.chain)
         # # ETH PRICE
@@ -709,13 +869,15 @@ def main(rpc="http://localhost:8545"):
         order.execute_order(order_key, deployed_oracle_address, overrides=overrides)
 
         # Check the balances after execution
-        balance = link_contract.functions.balanceOf(recipient_address).call()
-        print(f"Recipient LINK balance after swap: {balance / (10**decimals)}")
+        balance = initial_token_contract.functions.balanceOf(recipient_address).call()
+        symbol = initial_token_contract.functions.symbol().call()
+        print(f"Recipient {INITIAL_TOKEN_SYMBOL} balance after swap: {Decimal(balance / 10**decimals)} {symbol}")
 
         balance = target_contract.functions.balanceOf(recipient_address).call()
-        print(f"Recipient SOL balance after swap: {balance / 10**decimals}")
+        symbol = target_contract.functions.symbol().call()
+        print(f"Recipient {TARGET_TOKEN_SYMBOL} balance after swap: {Decimal(balance / 10**decimals)} {symbol}")
 
-        print(f"Change in SOL balance: {(balance - sol_balance_before) / 10**decimals}")
+        print(f"Change in {TARGET_TOKEN_SYMBOL} balance: {(balance - target_balance_before) / 10**decimals}")
     except Exception as e:
         print(f"Error during swap process: {e!s}")
         raise e
@@ -724,7 +886,5 @@ def main(rpc="http://localhost:8545"):
 
 
 if __name__ == "__main__":
-    # from anvil_set import set_opt_code
-
     # set_opt_code(JSON_RPC_BASE)
     main(JSON_RPC_BASE)

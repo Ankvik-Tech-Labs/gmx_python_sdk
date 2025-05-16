@@ -2,10 +2,19 @@
 from typing import Any, Union, Optional
 from web3 import Web3
 
-from gmx_python_sdk.scripts.v2.gmx_utils import create_connection, get_contract_object, get_datastore_contract
+from gmx_python_sdk.scripts.v2.gmx_utils import (
+    create_connection,
+    get_contract_object,
+    get_datastore_contract,
+)
 from gmx_python_sdk.scripts.v2.utils import keys
 from gmx_python_sdk.scripts.v2.utils.hash_utils import hash_string, hash_data
-from gmx_python_sdk.scripts.v2.utils.math import expand_decimals, MAX_UINT8, MAX_UINT32, MAX_UINT64
+from gmx_python_sdk.scripts.v2.utils.math import (
+    expand_decimals,
+    MAX_UINT8,
+    MAX_UINT32,
+    MAX_UINT64,
+)
 
 # Constants
 TOKEN_ORACLE_TYPES = {
@@ -69,7 +78,18 @@ def sign_price(
 
     expanded_precision = expand_decimals(1, int(precision))
     hash_result = hash_data(
-        ["bytes32", "uint256", "uint256", "uint256", "bytes32", "address", "bytes32", "uint256", "uint256", "uint256"],
+        [
+            "bytes32",
+            "uint256",
+            "uint256",
+            "uint256",
+            "bytes32",
+            "address",
+            "bytes32",
+            "uint256",
+            "uint256",
+            "uint256",
+        ],
         [
             salt,
             min_oracle_block_number,
@@ -169,7 +189,9 @@ def get_signer_info(signer_indexes: list[int]) -> int:
 
 
 def get_compacted_values(
-    values: list[Union[int, str]], compacted_value_bit_length: int, max_value: Union[int, str]
+    values: list[Union[int, str]],
+    compacted_value_bit_length: int,
+    max_value: Union[int, str],
 ) -> list[str]:
     """
     Compact values into fewer slots using bitwise operations
@@ -355,6 +377,7 @@ def get_oracle_params(
     config,
     keeper_address: Optional[str] = None,
     controller_address: Optional[str] = None,
+    deployed_oracle_address: Optional[str] = None,
 ) -> dict:
     """
     Get complete oracle parameters
@@ -441,12 +464,14 @@ def get_oracle_params(
             signatures,
         ]
         print(f"Data tuple: {data_tuple}")
-
+        # TODO: Look at this encoding might be wrong that's why the values are 0 for target token
+        # TODO: Update the custom oracle provider contract to see what'sup with it
         # Use the appropriate encoding method for the web3.py version
         try:
             # For newer web3.py versions
             data = web3_obj.eth.codec.encode_abi(
-                ["(address,uint256,uint256,uint256,uint256,uint256,bytes32,uint256[],uint256[],bytes[])"], [data_tuple]
+                ["(address,uint256,uint256,uint256,uint256,uint256,bytes32,uint256[],uint256[],bytes[])"],
+                [data_tuple],
             ).hex()
         except AttributeError:
             # For older web3.py versions
@@ -461,14 +486,17 @@ def get_oracle_params(
             )
 
         params["tokens"].append(token)
-        params["providers"].append(gm_oracle_provider.address)
+        # params["providers"].append(gm_oracle_provider.address)
+        # custom deployed oracle
+        params["providers"].append(deployed_oracle_address)
         params["data"].append(data)
 
     for i in range(len(price_feed_tokens)):
         token = price_feed_tokens[i]
         # Set the oracle provider for token using the SDK's pattern
         data_store.functions.setAddress(
-            keys.oracle_provider_for_token_key(token), chainlink_price_feed_provider.address
+            keys.oracle_provider_for_token_key(token),
+            chainlink_price_feed_provider.address,
         ).transact({"from": controller_address})
 
         params["tokens"].append(token)
@@ -479,7 +507,93 @@ def get_oracle_params(
         token = data_stream_tokens[i]
         # Set the oracle provider for token using the SDK's pattern
         data_store.functions.setAddress(
-            keys.oracle_provider_for_token_key(token), chainlink_data_stream_provider.address
+            keys.oracle_provider_for_token_key(token),
+            chainlink_data_stream_provider.address,
+        ).transact({"from": controller_address})
+
+        params["tokens"].append(token)
+        params["providers"].append(chainlink_data_stream_provider.address)
+        params["data"].append(data_stream_data[i])
+
+    return params
+
+
+def get_oracle_params_for_custom_oracle(
+    oracle_salt: str,
+    min_oracle_block_numbers: list[int],
+    max_oracle_block_numbers: list[int],
+    oracle_timestamps: list[int],
+    block_hashes: list[str],
+    signer_indexes: list[int],
+    tokens: list[str],
+    token_oracle_types: list[str],
+    precisions: list[int],
+    min_prices: list[int],
+    max_prices: list[int],
+    signers: list[Any],
+    data_stream_tokens: list[str],
+    data_stream_data: list[str],
+    price_feed_tokens: list[str],
+    config,
+    keeper_address: Optional[str] = None,
+    controller_address: Optional[str] = None,
+    deployed_oracle_address: Optional[str] = None,
+) -> dict:
+    """
+    Get complete oracle parameters, formatting `data` for getOraclePrice(token, data)
+
+    For custom providers, `data` is abi.encode([uint256, uint256, uint256], [min_price, max_price, timestamp]).
+    Chainlink feeds use empty data (`0x`).
+    Data streams pass through provided `data_stream_data`.
+
+    Returns:
+        Dictionary with keys: tokens, providers, data
+    """
+    # Prepare web3 and contracts
+    web3_obj = create_connection(config)
+    data_store = get_datastore_contract(config)
+    chainlink_price_feed_provider = get_contract_object(web3_obj, "chainlinkpricefeedprovider", config.chain)
+    chainlink_data_stream_provider = get_contract_object(web3_obj, "chainlinkdatastreamprovider", config.chain)
+
+    params = {"tokens": [], "providers": [], "data": []}
+
+    # Custom oracle encoding: [min_price, max_price, timestamp]
+    for i, token in enumerate(tokens):
+        min_price = min_prices[i]
+        max_price = max_prices[i]
+        timestamp = oracle_timestamps[i]
+
+        # Encode only the three uint256 values for getOraclePrice
+        try:
+            encoded = web3_obj.eth.codec.encode_abi(
+                ["uint256", "uint256", "uint256"], [min_price, max_price, timestamp]
+            ).hex()
+            data = "0x" + encoded if not encoded.startswith("0x") else encoded
+        except AttributeError:
+            from eth_abi import encode
+
+            data = "0x" + encode(["uint256", "uint256", "uint256"], [min_price, max_price, timestamp]).hex()
+
+        params["tokens"].append(token)
+        params["providers"].append(deployed_oracle_address)
+        params["data"].append(data)
+
+    # Chainlink price feeds: empty data
+    for token in price_feed_tokens:
+        data_store.functions.setAddress(
+            keys.oracle_provider_for_token_key(token),
+            chainlink_price_feed_provider.address,
+        ).transact({"from": controller_address})
+
+        params["tokens"].append(token)
+        params["providers"].append(chainlink_price_feed_provider.address)
+        params["data"].append("0x")
+
+    # Chainlink data streams: passed-through data
+    for i, token in enumerate(data_stream_tokens):
+        data_store.functions.setAddress(
+            keys.oracle_provider_for_token_key(token),
+            chainlink_data_stream_provider.address,
         ).transact({"from": controller_address})
 
         params["tokens"].append(token)
@@ -588,8 +702,28 @@ def encode_data_stream_data(data: dict) -> str:
     ask = data.get("ask")
 
     encoded = w3.eth.abi.encode_abi(
-        ["bytes32", "uint32", "uint32", "uint192", "uint192", "uint32", "int192", "int192", "int192"],
-        [feed_id, valid_from_timestamp, observations_timestamp, native_fee, link_fee, expires_at, price, bid, ask],
+        [
+            "bytes32",
+            "uint32",
+            "uint32",
+            "uint192",
+            "uint192",
+            "uint32",
+            "int192",
+            "int192",
+            "int192",
+        ],
+        [
+            feed_id,
+            valid_from_timestamp,
+            observations_timestamp,
+            native_fee,
+            link_fee,
+            expires_at,
+            price,
+            bid,
+            ask,
+        ],
     )
 
     return encoded.hex()

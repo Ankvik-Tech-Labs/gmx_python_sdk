@@ -2,7 +2,12 @@ import logging
 
 import numpy as np
 
-from ..gmx_utils import contract_map, convert_to_checksum_address, get_reader_contract, get_tokens_address_dict
+from ..gmx_utils import (
+    contract_map,
+    convert_to_checksum_address,
+    get_reader_contract,
+    get_tokens_address_dict,
+)
 from .get_markets import Markets
 from .get_oracle_prices import OraclePrices
 
