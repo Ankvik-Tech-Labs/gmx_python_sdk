@@ -37,7 +37,7 @@ from eth_utils import keccak
 
 import time
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/9629f1ed-91de-4e98-8766-331183137a1f"
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/baf0d3c9-8fd2-4b15-9bd0-44448c270fbc"
 TOKENS: dict[str] = {
     "USDC": to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831"),
     "SOL": to_checksum_address("0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07"),
@@ -48,7 +48,7 @@ TOKENS: dict[str] = {
 INITIAL_TOKEN_SYMBOL: str = "ARB"
 TARGET_TOKEN_SYMBOL: str = "SOL"
 
-inital_token_address: str = TOKENS[INITIAL_TOKEN_SYMBOL]
+initial_token_address: str = TOKENS[INITIAL_TOKEN_SYMBOL]
 target_token_address: str = TOKENS[TARGET_TOKEN_SYMBOL]
 
 
@@ -56,329 +56,139 @@ target_token_address: str = TOKENS[TARGET_TOKEN_SYMBOL]
 ORDER_LIST = create_hash_string("ORDER_LIST")
 print = Console().print
 
+def execute_order(
+    config,
+    connection,
+    order_key,
+    deployed_oracle_address,
+    logger=None,
+    overrides=None
+):
+    """
+    Execute an order with oracle prices
+    
+    Args:
+        config: Configuration object containing chain and other settings
+        connection: Web3 connection object
+        order_key: Key of the order to execute
+        deployed_oracle_address: Address of the deployed oracle contract
+        initial_token_address: Address of the initial token
+        target_token_address: Address of the target token
+        logger: Logger object (optional)
+        overrides: Optional parameters to override defaults
+        
+    Returns:
+        Result of the execute_with_oracle_params call
+    """
+    if logger is None:
+        import logging
+        logger = logging.getLogger(__name__)
+        
+    if overrides is None:
+        overrides = {}
 
-# Extend the SwapOrder class with new methods
-class EnhancedSwapOrder(SwapOrder):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    # Process override parameters
+    gas_usage_label = overrides.get("gas_usage_label")
+    oracle_block_number_offset = overrides.get("oracle_block_number_offset")
 
-    def create_order_and_get_key(self):
-        """Create a swap order and return the order key"""
-        user_wallet_address = self.config.user_wallet_address
+    # Set token addresses if not provided
+    tokens = overrides.get(
+        "tokens",
+        [
+            initial_token_address,
+            target_token_address,
+        ],
+    )
 
-        self.determine_gas_limits()
-        if not self.debug_mode:
-            self.check_for_approval()
+    # Fetch real-time prices
+    oracle_prices = OraclePrices(chain=config.chain).get_recent_prices()
 
-        # Calculate execution fee
-        gas_price = self._connection.eth.gas_price
-        execution_fee = int(
-            get_execution_fee(self._gas_limits, self._gas_limits_order_type, gas_price) * self.execution_buffer
-        )
+    # Extract prices for the tokens
+    default_min_prices = []
+    default_max_prices = []
 
-        # Build order parameters
-        order_typez = order_type["market_swap"]
+    for token in tokens:
+        if token in oracle_prices:
+            token_data = oracle_prices[token]
 
-        # Get minimum output amount from estimation
-        estimated_output = self.estimated_swap_output(
-            Markets(self.config).info[self.swap_path[0]],
-            self.collateral_address,
-            self.initial_collateral_delta_amount,
-        )
-        min_output_amount = int(
-            estimated_output["out_token_amount"] - estimated_output["out_token_amount"] * self.slippage_percent
-        )
+            # Get the base price values
+            min_price = int(token_data["minPriceFull"])
+            max_price = int(token_data["maxPriceFull"])
 
-        # Setup order arguments
-        callback_gas_limit = 0
-        decrease_position_swap_typez = decrease_position_swap_type["no_swap"]
-        should_unwrap_native_token = True
-        referral_code = HexBytes("0x0000000000000000000000000000000000000000000000000000000000000000")
-        eth_zero_address = convert_to_checksum_address(self.config, "0x0000000000000000000000000000000000000000")
-        ui_ref_address = convert_to_checksum_address(self.config, "0x0000000000000000000000000000000000000000")
-        gmx_market_address = "0x0000000000000000000000000000000000000000"  # Not important for swap
-        acceptable_price = 0  # Not important for swap
-
-        arguments = (
-            (
-                user_wallet_address,
-                user_wallet_address,  # cancellation_receiver
-                eth_zero_address,
-                ui_ref_address,
-                gmx_market_address,
-                self.collateral_address,
-                self.swap_path,
-            ),
-            (
-                0,  # size_delta
-                self.initial_collateral_delta_amount,
-                0,  # mark_price
-                acceptable_price,
-                execution_fee,
-                callback_gas_limit,
-                int(min_output_amount),
-                0,  # valid_from_time
-            ),
-            order_typez,
-            decrease_position_swap_typez,
-            self.is_long,
-            should_unwrap_native_token,
-            False,  # auto_cancel
-            referral_code,
-        )
-
-        # Build transaction
-        value_amount = execution_fee
-        if self.collateral_address != "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1":
-            multicall_args = [
-                HexBytes(self._send_wnt(value_amount)),
-                HexBytes(self._send_tokens(self.collateral_address, self.initial_collateral_delta_amount)),
-                HexBytes(self._create_order(arguments)),
-            ]
+            default_min_prices.append(min_price)
+            default_max_prices.append(max_price)
         else:
-            # Send start token and execute fee if token is ETH
-            value_amount = self.initial_collateral_delta_amount + execution_fee
-            multicall_args = [
-                HexBytes(self._send_wnt(value_amount)),
-                HexBytes(self._create_order(arguments)),
-            ]
+            # Fallback only if token not found in oracle prices
+            logger.warning(f"Price for token {token} not found, using fallback price")
+            default_min_prices.append(5000 * 10**18 if token == tokens[0] else 1 * 10**9)
+            default_max_prices.append(5000 * 10**18 if token == tokens[0] else 1 * 10**9)
 
-        # Submit transaction and get receipt
-        tx_hash = self._submit_transaction(
-            user_wallet_address,
-            value_amount,
-            multicall_args,
-            self._gas_limits,
-            return_hash=True,
-        )
+    # Set default parameters if not provided
+    data_stream_tokens = overrides.get("data_stream_tokens", [])
+    data_stream_data = overrides.get("data_stream_data", [])
+    price_feed_tokens = overrides.get("price_feed_tokens", [])
+    precisions = overrides.get("precisions", [1, 1])
 
-        print(f"Order creation transaction hash: {tx_hash.hex()}")
-        receipt = self._connection.eth.wait_for_transaction_receipt(tx_hash)
-        # for log in receipt.logs:
-        #     # Try to decode logs if you have relevant ABIs
-        #     print(f"Log topics: {log['topics']}")
-        #     print(f"Log data: {log['data'].hex()}")
+    min_prices = default_min_prices
+    max_prices = default_max_prices
 
-        # Get the order key from datastore using the ORDER_LIST constant we created
-        datastore = get_datastore_contract(self.config)
-        order_count = datastore.functions.getBytes32Count(ORDER_LIST).call()
-        if order_count == 0:
-            raise Exception("No orders found")
+    # Get oracle block number if not provided
+    oracle_block_number = overrides.get("oracle_block_number")
+    if not oracle_block_number:
+        oracle_block_number = connection.eth.block_number
 
-        # Get the most recent order key
-        order_key = datastore.functions.getBytes32ValuesAt(ORDER_LIST, order_count - 1, order_count).call()[0]
-        print(f"Order created with key: {order_key.hex()}")
+    # Apply oracle block number offset if provided
+    if oracle_block_number_offset:
+        if oracle_block_number_offset > 0:
+            # Since we can't "mine" blocks in Python directly, this would be handled differently
+            # in a real application. Here we just adjust the number.
+            pass
 
-        # Give blockchain a moment to process
-        time.sleep(2)
+        oracle_block_number += oracle_block_number_offset
 
-        return order_key
+    # Extract additional oracle parameters
+    oracle_blocks = overrides.get("oracle_blocks")
+    min_oracle_block_numbers = overrides.get("min_oracle_block_numbers")
+    max_oracle_block_numbers = overrides.get("max_oracle_block_numbers")
+    oracle_timestamps = overrides.get("oracle_timestamps")
+    block_hashes = overrides.get("block_hashes")
 
-    def execute_order(self, order_key, deployed_oracle_address, overrides=None):
-        """Execute an order with oracle prices"""
+    oracle_signer = overrides.get("oracle_signer", config.get_signer())
 
-        if overrides is None:
-            overrides = {}
-        # Get the datastore contract
-        # datastore = get_datastore_contract(self.config)
+    # Build the parameters for execute_with_oracle_params
+    params = {
+        "key": order_key,
+        "oracleBlockNumber": oracle_block_number,
+        "tokens": tokens,
+        "precisions": precisions,
+        "minPrices": min_prices,
+        "maxPrices": max_prices,
+        "simulate": overrides.get("simulate", False),
+        "gasUsageLabel": gas_usage_label,
+        "oracleBlocks": oracle_blocks,
+        "minOracleBlockNumbers": min_oracle_block_numbers,
+        "maxOracleBlockNumbers": max_oracle_block_numbers,
+        "oracleTimestamps": oracle_timestamps,
+        "blockHashes": block_hashes,
+        "dataStreamTokens": data_stream_tokens,
+        "dataStreamData": data_stream_data,
+        "priceFeedTokens": price_feed_tokens,
+    }
 
-        # Process override parameters
-        gas_usage_label = overrides.get("gas_usage_label")
-        oracle_block_number_offset = overrides.get("oracle_block_number_offset")
+    # Create a fixture-like object with necessary properties
+    fixture = {
+        "config": config,
+        "web3Provider": connection,
+        "chain": config.chain,
+        "accounts": {"signers": [oracle_signer] * 7},
+        "props": {
+            "oracleSalt": hash_data(["uint256", "string"], [config.chain_id, "xget-oracle-v1"]),
+            "signerIndexes": [0, 1, 2, 3, 4, 5, 6],  # Default signer indexes
+        },
+    }
 
-        # Set token addresses if not provided
-        tokens = overrides.get(
-            "tokens",
-            [
-                inital_token_address,
-                target_token_address,
-            ],
-        )
-
-        # Fetch real-time prices
-        oracle_prices = OraclePrices(chain=self.config.chain).get_recent_prices()
-        # print(f"Oracle prices: {oracle_prices}")
-
-        # Extract prices for the tokens
-        default_min_prices = []
-        default_max_prices = []
-
-        for token in tokens:
-            if token in oracle_prices:
-                token_data = oracle_prices[token]
-
-                # Get the base price values
-                min_price = int(token_data["minPriceFull"])
-                max_price = int(token_data["maxPriceFull"])
-
-                # # Apply appropriate decimal scaling based on token
-                # if token_data["tokenSymbol"] == "LINK" or token_data["tokenAddress"] == "0xf97f4df75117a78c1a5a0dbb814af92458539fb4":
-                #     # Scale for LINK with 18 decimals
-                #     min_price = min_price * 10**18
-                #     max_price = max_price * 10**18
-                # elif token_data["tokenSymbol"] == "SOL" or token_data["tokenAddress"] == "0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07":
-                #     # Scale for SOL with 9 decimals
-                #     min_price = min_price * 10**9
-                #     max_price = max_price * 10**9
-                # # For other tokens, use their default scaling if needed
-                # # else:
-                # #    min_price = min_price * 10**default_decimals
-
-                default_min_prices.append(min_price)
-                default_max_prices.append(max_price)
-            else:
-                # Fallback only if token not found in oracle prices
-                self.log.warning(f"Price for token {token} not found, using fallback price")
-                default_min_prices.append(5000 * 10**18 if token == tokens[0] else 1 * 10**9)
-                default_max_prices.append(5000 * 10**18 if token == tokens[0] else 1 * 10**9)
-
-        # Set default parameters if not provided
-        data_stream_tokens = overrides.get("data_stream_tokens", [])
-        data_stream_data = overrides.get("data_stream_data", [])
-        price_feed_tokens = overrides.get("price_feed_tokens", [])
-        # precisions = overrides.get("precisions", [18, 9])
-        # ? Don't sclae it
-        precisions = overrides.get("precisions", [1, 1])
-
-        min_prices = default_min_prices
-        max_prices = default_max_prices
-
-        # print("min_prices: ", min_prices)
-        # print("max_prices: ", max_prices)
-
-        # Get oracle block number if not provided
-        oracle_block_number = overrides.get("oracle_block_number")
-        if not oracle_block_number:
-            oracle_block_number = self._connection.eth.block_number
-
-        # Apply oracle block number offset if provided
-        if oracle_block_number_offset:
-            if oracle_block_number_offset > 0:
-                # Since we can't "mine" blocks in Python directly, this would be handled differently
-                # in a real application. Here we just adjust the number.
-                pass
-
-            oracle_block_number += oracle_block_number_offset
-
-        # Extract additional oracle parameters
-        oracle_blocks = overrides.get("oracle_blocks")
-        min_oracle_block_numbers = overrides.get("min_oracle_block_numbers")
-        max_oracle_block_numbers = overrides.get("max_oracle_block_numbers")
-        oracle_timestamps = overrides.get("oracle_timestamps")
-        block_hashes = overrides.get("block_hashes")
-
-        oracle_signer = overrides.get("oracle_signer", self.config.get_signer())
-
-        # Build the parameters for execute_with_oracle_params
-        params = {
-            "key": order_key,
-            "oracleBlockNumber": oracle_block_number,
-            "tokens": tokens,
-            "precisions": precisions,
-            "minPrices": min_prices,
-            "maxPrices": max_prices,
-            "simulate": overrides.get("simulate", False),
-            "gasUsageLabel": gas_usage_label,
-            "oracleBlocks": oracle_blocks,
-            "minOracleBlockNumbers": min_oracle_block_numbers,
-            "maxOracleBlockNumbers": max_oracle_block_numbers,
-            "oracleTimestamps": oracle_timestamps,
-            "blockHashes": block_hashes,
-            "dataStreamTokens": data_stream_tokens,
-            "dataStreamData": data_stream_data,
-            "priceFeedTokens": price_feed_tokens,
-        }
-
-        # Create a fixture-like object with necessary properties
-        fixture = {
-            "config": self.config,
-            "web3Provider": self._connection,
-            "chain": self.config.chain,
-            # "accounts": {"signers": [self.config.get_signer()] * 7},
-            "accounts": {"signers": [oracle_signer] * 7},
-            "props": {
-                "oracleSalt": hash_data(["uint256", "string"], [self.config.chain_id, "xget-oracle-v1"]),
-                "signerIndexes": [0, 1, 2, 3, 4, 5, 6],  # Default signer indexes
-            },
-        }
-
-        print("************************")
-        print(f"params: {params}")
-        print("************************")
-        print(f"fixture: {fixture}")
-        print("************************")
-        # Call execute_with_oracle_params with the built parameters
-        return execute_with_oracle_params(fixture, params, self.config, deployed_oracle_address=deployed_oracle_address)
-
-    def _submit_transaction(
-        self,
-        user_wallet_address: str,
-        value_amount: float,
-        multicall_args: list,
-        gas_limits: dict,
-        return_hash: bool = False,
-    ):
-        """
-        Submit Transaction
-
-        Parameters
-        ----------
-        user_wallet_address : str
-            Address of the user's wallet (used for nonce calculation)
-        value_amount : float
-            Amount of native token to send with the transaction
-        multicall_args : list
-            List of encoded function calls for multicall
-        gas_limits : dict
-            Gas limits for the transaction
-        return_hash : bool
-            Whether to return the transaction hash
-
-        Returns
-        -------
-        str or None
-            Transaction hash if transaction is sent and return_hash is True,
-            None in debug mode or if return_hash is False
-        """
-        self.log.info("Building transaction...")
-
-        # Get the signer from config
-        signer = self.config.get_signer()
-
-        try:
-            wallet_address = Web3.to_checksum_address(user_wallet_address)
-        except AttributeError:
-            wallet_address = Web3.toChecksumAddress(user_wallet_address)
-
-        # Ensure the signer address matches the wallet address
-        if signer.get_address().lower() != wallet_address.lower():
-            self.log.warning(f"Signer address {signer.get_address()} doesn't match wallet address {wallet_address}")
-
-        nonce = self._connection.eth.get_transaction_count(signer.get_address())
-
-        raw_txn = self._exchange_router_contract_obj.functions.multicall(multicall_args).build_transaction(
-            {
-                "from": signer.get_address(),
-                "value": value_amount,
-                "chainId": self.config.chain_id,
-                "gas": (self._gas_limits_order_type.call() + self._gas_limits_order_type.call()),
-                "maxFeePerGas": int(self.max_fee_per_gas),
-                "maxPriorityFeePerGas": 0,
-                "nonce": nonce,
-            }
-        )
-
-        if not self.debug_mode:
-            # Use signer to send the transaction
-            tx_hash = signer.send_transaction(raw_txn)
-
-            self.log.info("Txn submitted!")
-            self.log.info(f"Check status: https://arbiscan.io/tx/{tx_hash.hex()}")
-
-            if return_hash:
-                return tx_hash
-
-        return None
+    # Call execute_with_oracle_params with the built parameters
+    return execute_with_oracle_params(fixture, params, config, deployed_oracle_address=deployed_oracle_address)
 
 
 GMX_ADMIN = "0x7A967D114B8676874FA2cFC1C14F3095C88418Eb"
@@ -679,7 +489,7 @@ def main(rpc="http://localhost:8545"):
         },
     ]
 
-    initial_token_contract = w3.eth.contract(address=inital_token_address, abi=erc20_abi)
+    initial_token_contract = w3.eth.contract(address=initial_token_address, abi=erc20_abi)
     target_contract = w3.eth.contract(address=target_token_address, abi=erc20_abi)
 
     decimals = initial_token_contract.functions.decimals().call()
@@ -717,7 +527,7 @@ def main(rpc="http://localhost:8545"):
         "slippage_percent": 0.02,
     }
     # if we have already deployed then set the addres if not set to None
-    deployed: Optional[tuple[str]] = ("0xe5079266f1eFe32c4BCf36D60F08b240f1B347de", None)  # (None, None)
+    deployed: Optional[tuple[str]] = (None, None)  # (None, None)
     if not deployed[0]:
         deployed_oracle_address = deploy_custom_oracle_provider(w3, config.get_signer())
         custom_oracle_contract_address = deploy_custom_oracle(w3, config.get_signer())
@@ -727,7 +537,7 @@ def main(rpc="http://localhost:8545"):
     order_parameters = OrderArgumentParser(config, is_swap=True).process_parameters_dictionary(parameters)
     print(f"Order parameters: {order_parameters}")
     # Create our enhanced swap order
-    order = EnhancedSwapOrder(
+    order = SwapOrder(
         config=config,
         market_key=order_parameters["swap_path"][-1],
         start_token=order_parameters["start_token_address"],
@@ -845,6 +655,7 @@ def main(rpc="http://localhost:8545"):
         min_price: int = int(oracle_prices[TOKENS[TARGET_TOKEN_SYMBOL]]["minPriceFull"])
         max_res = override_storage_slot(oracle_contract, token_b_max_value_slot, max_price, w3)
         min_res = override_storage_slot(oracle_contract, token_b_min_value_slot, min_price, w3)
+        
         print(f"Max price: {max_price}")
         print(f"Min price: {min_price}")
         print(f"Max res: {max_res}")
@@ -865,7 +676,7 @@ def main(rpc="http://localhost:8545"):
             # ],
         }
         # Execute the order with oracle prices
-        order.execute_order(order_key, deployed_oracle_address, overrides=overrides)
+        execute_order(config=config, connection=w3,order_key=order_key, deployed_oracle_address=deployed_oracle_address, overrides=overrides)
 
         # Check the balances after execution
         balance = initial_token_contract.functions.balanceOf(recipient_address).call()
