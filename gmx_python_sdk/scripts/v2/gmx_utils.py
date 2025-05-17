@@ -185,7 +185,7 @@ class ConfigManager:
         # Reset signer when private key changes
         self._signer = None
 
-    def get_web3_connection(self):
+    def get_web3_connection(self, timeout: Optional[int] = 30):
         """
         Get or create a Web3 connection.
 
@@ -198,7 +198,7 @@ class ConfigManager:
             if self.rpc is None:
                 msg = "RPC URL is required to create a Web3 connection"
                 raise ValueError(msg)
-            self._web3_connection = Web3(Web3.HTTPProvider(self.rpc))
+            self._web3_connection = Web3(Web3.HTTPProvider(self.rpc, request_kwargs={"timeout": timeout}))
 
         return self._web3_connection
 
