@@ -131,7 +131,7 @@ def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle
 
     # Get blockchain block information
     block = web3_provider.eth.get_block(int(oracle_block_number))
-    print(f"Block number: {block.number}")
+    # print(f"Block number: {block.number}")
 
     # Default to standard oracle types if not provided
     token_oracle_types = overrides.get("tokenOracleTypes", [TOKEN_ORACLE_TYPES["DEFAULT"]] * len(tokens))
@@ -218,7 +218,7 @@ def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle
         keeper_address = "0xE47b36382DC50b90bCF6176Ddb159C4b9333A7AB"
         controller_address = "0xb6d37DFCdA9c237ca98215f9154Dc414EFe0aC1b"
         # Get full oracle parameters for execution
-        print(f"Args for oracle params: {args}")
+        # print(f"Args for oracle params: {args}")
         oracle_params = get_oracle_params_for_custom_oracle(
             config=config,
             keeper_address=keeper_address,
@@ -266,11 +266,10 @@ def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle
         # Build the transaction
         transaction = order_handler.functions.executeOrder(key, oracle_params).build_transaction(
             {
-                "from": keeper_address,  # to_checksum_address(active_signer.get_address()),
+                "from": keeper_address,
                 "nonce": nonce,
-                "gas": 90000000,  # Set appropriate gas limit
-                "maxFeePerGas": web3_provider.eth.gas_price * 200,  # Adjust as needed
-                "maxPriorityFeePerGas": web3_provider.eth.gas_price // 10,  # Adjust as needed
+                "gas": 90000000,
+                "gasPrice": web3_provider.eth.gas_price
             }
         )
         # owner of order_handler 0xE7BfFf2aB721264887230037940490351700a068
