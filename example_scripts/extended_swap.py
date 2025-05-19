@@ -56,17 +56,11 @@ target_token_address: str = TOKENS[TARGET_TOKEN_SYMBOL]
 ORDER_LIST = create_hash_string("ORDER_LIST")
 print = Console().print
 
-def execute_order(
-    config,
-    connection,
-    order_key,
-    deployed_oracle_address,
-    logger=None,
-    overrides=None
-):
+
+def execute_order(config, connection, order_key, deployed_oracle_address, logger=None, overrides=None):
     """
     Execute an order with oracle prices
-    
+
     Args:
         config: Configuration object containing chain and other settings
         connection: Web3 connection object
@@ -76,14 +70,15 @@ def execute_order(
         target_token_address: Address of the target token
         logger: Logger object (optional)
         overrides: Optional parameters to override defaults
-        
+
     Returns:
         Result of the execute_with_oracle_params call
     """
     if logger is None:
         import logging
+
         logger = logging.getLogger(__name__)
-        
+
     if overrides is None:
         overrides = {}
 
@@ -655,7 +650,7 @@ def main(rpc="http://localhost:8545"):
         min_price: int = int(oracle_prices[TOKENS[TARGET_TOKEN_SYMBOL]]["minPriceFull"])
         max_res = override_storage_slot(oracle_contract, token_b_max_value_slot, max_price, w3)
         min_res = override_storage_slot(oracle_contract, token_b_min_value_slot, min_price, w3)
-        
+
         print(f"Max price: {max_price}")
         print(f"Min price: {min_price}")
         print(f"Max res: {max_res}")
@@ -676,7 +671,13 @@ def main(rpc="http://localhost:8545"):
             # ],
         }
         # Execute the order with oracle prices
-        execute_order(config=config, connection=w3,order_key=order_key, deployed_oracle_address=deployed_oracle_address, overrides=overrides)
+        execute_order(
+            config=config,
+            connection=w3,
+            order_key=order_key,
+            deployed_oracle_address=deployed_oracle_address,
+            overrides=overrides,
+        )
 
         # Check the balances after execution
         balance = initial_token_contract.functions.balanceOf(recipient_address).call()
