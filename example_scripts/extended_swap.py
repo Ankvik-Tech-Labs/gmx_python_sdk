@@ -37,7 +37,7 @@ from eth_utils import keccak
 
 import time
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/013d2ee7-f438-434d-9f64-d2dce7273607"
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/d56c8cab-b2f1-443e-918d-202eca02c91b"
 TOKENS: dict[str] = {
     "USDC": to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831"),
     "SOL": to_checksum_address("0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07"),

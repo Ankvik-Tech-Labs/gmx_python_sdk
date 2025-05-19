@@ -74,6 +74,38 @@ def get_execute_params(fixture, params: dict[str, Any]) -> dict[str, list]:
     return result_params
 
 
+# Handle block hash conversion to bytes properly for all formats
+def get_block_hashes(block, tokens):
+    if block.hash is None:
+        # Handle the case when block hash is None
+        return [b"\x00" * 32] * len(tokens)  # Use null bytes as placeholder
+
+    # If block hash is already bytes, use it directly
+    if isinstance(block.hash, bytes):
+        block_hash_bytes = block.hash
+    # If it's HexBytes, convert to regular bytes
+    elif hasattr(block.hash, "hex") and callable(getattr(block.hash, "hex")):
+        block_hash_bytes = block.hash
+    # Handle hex string with '0x' prefix
+    elif isinstance(block.hash, str):
+        # Remove '0x' prefix if present
+        clean_hash = block.hash[2:] if block.hash.startswith("0x") else block.hash
+        try:
+            # Convert hex string to bytes
+            block_hash_bytes = bytes.fromhex(clean_hash)
+        except ValueError as e:
+            # Log the problematic hash for debugging
+            print(f"Error converting block hash: {block.hash}, type: {type(block.hash)}")
+            # Fallback to a safe default or raise custom error with more details
+            raise ValueError(f"Invalid block hash format: {block.hash}") from e
+    else:
+        # Unknown format - raise a clear error
+        raise TypeError(f"Unsupported block hash type: {type(block.hash)}")
+
+    # Create a list of the same block hash for each token
+    return [block_hash_bytes] * len(tokens)
+
+
 def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle_address) -> Any:
     """
     Execute a transaction with oracle parameters
@@ -169,7 +201,7 @@ def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle
 
         # Handle block hash depending on its format
         block_hash = block.hash.hex() if isinstance(block.hash, bytes) else block.hash
-        block_hashes = [bytes.fromhex(block_hash)] * len(tokens)
+        block_hashes = get_block_hashes(block, tokens)
 
     # Prepare arguments for oracle parameters - no conditional checks needed now
     args = {
@@ -268,9 +300,8 @@ def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle
             {
                 "from": keeper_address,  # to_checksum_address(active_signer.get_address()),
                 "nonce": nonce,
-                "gas": 90000000,  # Set appropriate gas limit
-                "maxFeePerGas": web3_provider.eth.gas_price * 200,  # Adjust as needed
-                "maxPriorityFeePerGas": web3_provider.eth.gas_price // 10,  # Adjust as needed
+                "gas": 90000000,
+                "gasPrice": web3_provider.eth.gas_price,
             }
         )
         # owner of order_handler 0xE7BfFf2aB721264887230037940490351700a068
