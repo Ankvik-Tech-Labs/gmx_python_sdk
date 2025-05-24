@@ -4,3 +4,4 @@
 *.csv
 poetry.lock
 .env
+config.toml
