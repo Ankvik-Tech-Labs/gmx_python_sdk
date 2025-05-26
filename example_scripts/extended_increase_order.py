@@ -1,27 +1,28 @@
+from ctypes.wintypes import SHORT
 from decimal import Decimal
 import json
 from pathlib import Path
 from typing import Optional
 
 import requests
+from example_scripts.get_positions import get_positions
 from example_scripts.anvil_set import set_opt_code
-from gmx_python_sdk.scripts.v2.order import deposit
+from gmx_python_sdk.scripts.v2.order.create_increase_order import IncreaseOrder
 from gmx_python_sdk.scripts.v2.utils.exchange import execute_with_oracle_params
 from gmx_python_sdk.scripts.v2.utils.hash_utils import hash_data
 from gmx_python_sdk.scripts.v2.utils.keys import IS_ORACLE_PROVIDER_ENABLED, MAX_ORACLE_REF_PRICE_DEVIATION_FACTOR
 from utils import _set_paths
 
-_set_paths()
 
 from eth_utils import to_checksum_address
 from web3 import Web3
 
 from gmx_python_sdk.scripts.v2.gmx_utils import (
     ConfigManager,
+    get_contract_object,
     get_datastore_contract,
     get_reader_contract,
 )
-from gmx_python_sdk.scripts.v2.order.create_swap_order import SwapOrder
 from gmx_python_sdk.scripts.v2.order.order_argument_parser import OrderArgumentParser
 from gmx_python_sdk.scripts.v2.get.get_oracle_prices import OraclePrices
 from gmx_python_sdk.scripts.v2.keys import create_hash_string
@@ -29,20 +30,30 @@ from rich.console import Console
 from eth_abi import encode
 from eth_utils import keccak
 
+_set_paths()
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/baf0d3c9-8fd2-4b15-9bd0-44448c270fbc"
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/4d5acfbc-7bb9-454b-b52c-a29df2eaa17f"
 TOKENS: dict[str] = {
     "USDC": to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831"),
     "SOL": to_checksum_address("0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07"),
     "ARB": to_checksum_address("0x912ce59144191c1204e64559fe8253a0e49e6548"),
     "LINK": to_checksum_address("0xf97f4df75117a78c1A5a0DBb814Af92458539FB4"),
+    "GMX": to_checksum_address("0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a"),
+    "BTC": to_checksum_address("0x47904963fc8b2340414262125aF798B9655E58Cd"),
 }
 
-INITIAL_TOKEN_SYMBOL: str = "ARB"
-TARGET_TOKEN_SYMBOL: str = "SOL"
+# the token to start with
+INITIAL_TOKEN_SYMBOL: str = "USDC"
+# the market you want to trade on
+INDEX_TOKEN_SYMBOL: str = "GMX"
+COLLATERAL_TOKEN_SYMBOL: str = "GMX"
+
+# ? This setup will trade on INDEX_TOKEN_SYMBOL market using COLLATERAL_TOKEN_SYMBOL as collateral
+# ? If INITIAL_TOKEN_SYMBOL is different from COLLATERAL_TOKEN_SYMBOL,
+# ? it will swap INITIAL_TOKEN_SYMBOL to COLLATERAL_TOKEN_SYMBOL
 
 initial_token_address: str = TOKENS[INITIAL_TOKEN_SYMBOL]
-target_token_address: str = TOKENS[TARGET_TOKEN_SYMBOL]
+# target_token_address: str = TOKENS[INDEX_TOKEN_SYMBOL]
 
 
 # Create the ORDER_LIST key directly
@@ -82,10 +93,7 @@ def execute_order(config, connection, order_key, deployed_oracle_address, logger
     # Set token addresses if not provided
     tokens = overrides.get(
         "tokens",
-        [
-            initial_token_address,
-            target_token_address,
-        ],
+        [],
     )
 
     # Fetch real-time prices
@@ -305,9 +313,9 @@ def deploy_custom_oracle(w3: Web3, account) -> str:
     print(f"📌 eventEmitter address: {event_emitter_address}")
     bytecode = w3.eth.get_code(contract_address)
 
-    original_oracle_contract = to_checksum_address("0x918b60ba71badfada72ef3a6c6f71d0c41d4785c")
+    original_oracle_contract_address = to_checksum_address("0x918b60ba71badfada72ef3a6c6f71d0c41d4785c")
 
-    set_opt_code(JSON_RPC_BASE, bytecode, original_oracle_contract)
+    set_opt_code(JSON_RPC_BASE, bytecode, original_oracle_contract_address)
 
     return contract_address
 
@@ -397,7 +405,8 @@ def override_storage_slot(
 
     # Check connection
     if not web3.is_connected():
-        raise Exception(f"Could not connect to Anvil node at {web3.provider.endpoint_uri}")
+        msg = f"Could not connect to Anvil node at {web3.provider.endpoint_uri}"
+        raise Exception(msg)
 
     # Format the value to a 32-byte hex string with '0x' prefix
     # First convert to hex without '0x'
@@ -421,7 +430,8 @@ def override_storage_slot(
 
     # Check for errors
     if "error" in result:
-        raise Exception(f"Error setting storage: {result['error']}")
+        msg = f"Error setting storage: {result['error']}"
+        raise Exception(msg)
 
     print(f"Successfully set storage at slot {slot} to {padded_hex_value}")
 
@@ -437,7 +447,7 @@ def main(rpc="http://localhost:8545"):
     # add_tenderly_balances()
 
     # Addresses
-    whale_address = "0xD7a827FBaf38c98E8336C5658E4BcbCD20a4fd2d"
+    # whale_address = "0xD7a827FBaf38c98E8336C5658E4BcbCD20a4fd2d"
     recipient_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
     # link_token_address = "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4"  # LINK token contract
 
@@ -478,7 +488,6 @@ def main(rpc="http://localhost:8545"):
     ]
 
     initial_token_contract = w3.eth.contract(address=initial_token_address, abi=erc20_abi)
-    target_contract = w3.eth.contract(address=target_token_address, abi=erc20_abi)
 
     decimals = initial_token_contract.functions.decimals().call()
     symbol = initial_token_contract.functions.symbol().call()
@@ -486,16 +495,6 @@ def main(rpc="http://localhost:8545"):
     # Check initial balances
     balance = initial_token_contract.functions.balanceOf(recipient_address).call()
     print(f"Recipient {INITIAL_TOKEN_SYMBOL} balance: {Decimal(balance / 10**decimals)} {symbol}")
-
-    target_balance_before = target_contract.functions.balanceOf(recipient_address).call()
-    target_symbol = target_contract.functions.symbol().call()
-    target_decimals = target_contract.functions.decimals().call()
-
-    # Convert both values to Decimal BEFORE division
-    balance_decimal = Decimal(str(target_balance_before)) / Decimal(10**target_decimals)
-
-    # Format to avoid scientific notation and show proper decimal places
-    print(f"Recipient {TARGET_TOKEN_SYMBOL} balance before: {balance_decimal:.18f} {target_symbol}")
 
     # GMX config
     config = ConfigManager(chain="arbitrum")
@@ -507,39 +506,46 @@ def main(rpc="http://localhost:8545"):
 
     parameters = {
         "chain": "arbitrum",
-        "out_token_symbol": TARGET_TOKEN_SYMBOL,
-        "start_token_symbol": INITIAL_TOKEN_SYMBOL,
+        # the market you want to trade on
+        "index_token_symbol": INDEX_TOKEN_SYMBOL,  # BTC
+        # token to use as collateral. Start token swaps into collateral token
+        # if different
+        "collateral_token_symbol": COLLATERAL_TOKEN_SYMBOL,  # ARB
+        # the token to start with - WETH not supported yet
+        "start_token_symbol": INITIAL_TOKEN_SYMBOL,  # ARB
+        # True for long, False for short
         "is_long": False,
-        "size_delta_usd": 0,
-        "initial_collateral_delta": 50000.3785643,
-        "slippage_percent": 0.02,
+        # Position size in in USD
+        "size_delta_usd": 5000,
+        # if leverage is passed, will calculate number of tokens in
+        # start_token_symbol amount
+        "leverage": 1,
+        # as a decimal ie 0.003 == 0.3%
+        "slippage_percent": 0.003,
     }
     # if we have already deployed then set the addres if not set to None
     deployed: Optional[tuple[str]] = (None, None)  # (None, None)
     if not deployed[0]:
         deployed_oracle_address = deploy_custom_oracle_provider(w3, config.get_signer())
-        custom_oracle_contract_address = deploy_custom_oracle(w3, config.get_signer())
+        custom_oracle_contract_address_address = deploy_custom_oracle(w3, config.get_signer())
     else:
         deployed_oracle_address = deployed[0]
-        custom_oracle_contract_address = deployed[1]
-    order_parameters = OrderArgumentParser(config, is_swap=True).process_parameters_dictionary(parameters)
+        custom_oracle_contract_address_address = deployed[1]
+    order_parameters = OrderArgumentParser(config, is_increase=True).process_parameters_dictionary(parameters)
     print(f"Order parameters: {order_parameters}")
     # Create our enhanced swap order
-    order = SwapOrder(
+    order = IncreaseOrder(
         config=config,
-        market_key=order_parameters["swap_path"][-1],
-        start_token=order_parameters["start_token_address"],
-        out_token=order_parameters["out_token_address"],
+        market_key=order_parameters["market_key"],
         collateral_address=order_parameters["start_token_address"],
-        index_token_address=order_parameters["out_token_address"],
-        is_long=False,
-        size_delta=0,
+        index_token_address=order_parameters["index_token_address"],
+        is_long=order_parameters["is_long"],
+        size_delta=order_parameters["size_delta"],
         initial_collateral_delta_amount=(order_parameters["initial_collateral_delta"]),
         slippage_percent=order_parameters["slippage_percent"],
         swap_path=order_parameters["swap_path"],
         debug_mode=False,
-        execution_buffer=2.2,
-        max_fee_per_gas=365723000 * 2,
+        execution_buffer=1.5,
     )
     # NOTE: What ever happens from here should be done by the addreess with higher clearance
     # Create the order and get the key
@@ -555,7 +561,8 @@ def main(rpc="http://localhost:8545"):
         )
         order_count = data_store.functions.getBytes32Count(ORDER_LIST).call()
         if order_count == 0:
-            raise Exception("No orders found")
+            msg = "No orders found"
+            raise Exception(msg)
 
         # Get the most recent order key
         order_key = data_store.functions.getBytes32ValuesAt(ORDER_LIST, order_count - 1, order_count).call()[0]
@@ -601,7 +608,7 @@ def main(rpc="http://localhost:8545"):
 
         # TODO: This will change for various tokens apparently
         # pass the test `address expectedProvider = dataStore.getAddress(Keys.oracleProviderForTokenKey(token));` in Oracle.sol#L278
-        address_slot: str = "0x233a49594db4e7a962a8bd9ec7298b99d6464865065bd50d94232b61d213f16d"
+        address_slot: str = "0xee7ecf2be3f04718c696284b0fa544a16d84b94ffa10065f156555438db93488"
         data_store.functions.setAddress(address_slot, custom_oracle_provider).transact({"from": controller})
 
         new_address = data_store.functions.getAddress(address_slot).call()
@@ -627,32 +634,52 @@ def main(rpc="http://localhost:8545"):
         # ? Set the `maxRefPriceDeviationFactor` to pass tests in `Oracle.sol`
         price_deviation_factor_key: str = f"0x{MAX_ORACLE_REF_PRICE_DEVIATION_FACTOR.hex()}"
         # * set some big value to pass the test
-        large_value: int = 10021573904618365809021423188717
-        data_store.functions.setUint(price_deviation_factor_key, large_value).transact({"from": controller})
-        value = data_store.functions.getUint(price_deviation_factor_key).call()
-        print(f"Value: {value}")
-        assert value == large_value, f"Value should be {large_value}"
+        # large_value: int = 10021573904618365809021423188717
+        # data_store.functions.setUint(price_deviation_factor_key, large_value).transact({"from": controller})
+        # value = data_store.functions.getUint(price_deviation_factor_key).call()
+        # print(f"Value: {value}")
+        # assert value == large_value, f"Value should be {large_value}"
 
-        oracle_contract: str = "0x918b60ba71badfada72ef3a6c6f71d0c41d4785c"
-        token_b_max_value_slot: str = "0x636d2c90aa7802b40e3b1937e91c5450211eefbc7d3e39192aeb14ee03e3a958"
-        token_b_min_value_slot: str = "0x636d2c90aa7802b40e3b1937e91c5450211eefbc7d3e39192aeb14ee03e3a959"
+        # oracle_contract_address: str = "0x918b60ba71badfada72ef3a6c6f71d0c41d4785c"
+        # token_b_max_value_slot: str = "0x636d2c90aa7802b40e3b1937e91c5450211eefbc7d3e39192aeb14ee03e3a958"
+        # token_b_min_value_slot: str = "0x636d2c90aa7802b40e3b1937e91c5450211eefbc7d3e39192aeb14ee03e3a959"
 
+        # TODO: Fix the pricing & add pricing for market tokens as well
         oracle_prices = OraclePrices(chain=parameters["chain"]).get_recent_prices()
 
-        max_price: int = int(oracle_prices[TOKENS[TARGET_TOKEN_SYMBOL]]["maxPriceFull"])
-        min_price: int = int(oracle_prices[TOKENS[TARGET_TOKEN_SYMBOL]]["minPriceFull"])
-        max_res = override_storage_slot(oracle_contract, token_b_max_value_slot, max_price, w3)
-        min_res = override_storage_slot(oracle_contract, token_b_min_value_slot, min_price, w3)
+        # # Index token price setup
+        # max_price: int = int(oracle_prices[TOKENS[INDEX_TOKEN_SYMBOL]]["maxPriceFull"])
+        # min_price: int = int(oracle_prices[TOKENS[INDEX_TOKEN_SYMBOL]]["minPriceFull"])
+        # max_res = override_storage_slot(oracle_contract_address, token_b_max_value_slot, max_price, w3)
+        # min_res = override_storage_slot(oracle_contract_address, token_b_min_value_slot, min_price, w3)
 
-        print(f"Max price: {max_price}")
-        print(f"Min price: {min_price}")
-        print(f"Max res: {max_res}")
-        print(f"Min res: {min_res}")
+        # # Short token price setup
+        # max_price = int(oracle_prices[TOKENS[COLLATERAL_TOKEN_SYMBOL]]["maxPriceFull"])
+        # min_price = int(oracle_prices[TOKENS[COLLATERAL_TOKEN_SYMBOL]]["minPriceFull"])
+        # max_res = override_storage_slot(oracle_contract_address, token_b_max_value_slot, max_price, w3)
+        # min_res = override_storage_slot(oracle_contract_address, token_b_min_value_slot, min_price, w3)
+
+        # # Start/Initial token price setup
+        max_price = int(oracle_prices[TOKENS[INITIAL_TOKEN_SYMBOL]]["maxPriceFull"])
+        min_price = int(oracle_prices[TOKENS[INITIAL_TOKEN_SYMBOL]]["minPriceFull"])
+        # max_res = override_storage_slot(oracle_contract_address, token_b_max_value_slot, max_price, w3)
+        # min_res = override_storage_slot(oracle_contract_address, token_b_min_value_slot, min_price, w3)
+
+        oracle_contract = get_contract_object(config.get_web3_connection(), "oracle", config.chain)
+        # SET PRICES
+        oracle_contract.functions.setPrimaryPrice(TOKENS[INITIAL_TOKEN_SYMBOL], (min_price, max_price)).transact(
+            {"from": controller}
+        )
+
+        # print(f"Max price: {max_price}")
+        # print(f"Min price: {min_price}")
+        # print(f"Max res: {max_res}")
+        # print(f"Min res: {min_res}")
 
         # # ! Can't do it here
-        # oracle_contract = get_contract_object(config.get_web3_connection(), "oracle", config.chain)
+        # oracle_contract_address = get_contract_object(config.get_web3_connection(), "oracle", config.chain)
         # # ETH PRICE
-        # oracle_contract.functions.setPrimaryPrice(link_token_address, (2492652716024169, 2492891019455477)).transact({"from": controller})
+        # oracle_contract_address.functions.setPrimaryPrice(link_token_address, (2492652716024169, 2492891019455477)).transact({"from": controller})
 
         # print(f"Order key: {order_key.hex()}")
         overrides = {
@@ -662,13 +689,14 @@ def main(rpc="http://localhost:8545"):
             #     to_checksum_address("0xf97f4df75117a78c1a5a0dbb814af92458539fb4"),  # LINK on Arbitrum
             #     to_checksum_address("0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07"),  # SOL on Arbitrum
             # ],
+            "tokens": order_parameters["swap_path"],
         }
         # Execute the order with oracle prices
         execute_order(
             config=config,
             connection=w3,
             order_key=order_key,
-            deployed_oracle_address=deployed_oracle_address,
+            deployed_oracle_address=custom_oracle_provider,
             overrides=overrides,
         )
 
@@ -677,22 +705,14 @@ def main(rpc="http://localhost:8545"):
         symbol = initial_token_contract.functions.symbol().call()
         print(f"Recipient {INITIAL_TOKEN_SYMBOL} balance after swap: {Decimal(balance / 10**decimals)} {symbol}")
 
-        target_balance_after = target_contract.functions.balanceOf(recipient_address).call()
-        symbol = target_contract.functions.symbol().call()
-        target_decimals = target_contract.functions.decimals().call()
+        positions = get_positions(config, recipient_address)
 
-        balance_decimal = Decimal(str(target_balance_after)) / Decimal(10**target_decimals)
+        for position in positions:
+            print(f"Position: {position}")
 
-        # Format to avoid scientific notation and show proper decimal places
-        print(f"Recipient {TARGET_TOKEN_SYMBOL} balance after swap: {balance_decimal:.18f} {target_symbol}")
-        print(
-            f"Change in {TARGET_TOKEN_SYMBOL} balance: {Decimal((target_balance_after - target_balance_before) / 10**target_decimals):.18f}"
-        )
     except Exception as e:
         print(f"Error during swap process: {e!s}")
         raise e
-
-    return order
 
 
 if __name__ == "__main__":

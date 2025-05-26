@@ -1,9 +1,11 @@
 import logging
 from typing import Any
 
+from eth_utils import to_checksum_address
+
+from gmx_python_sdk.scripts.v2.get.get_oracle_prices import OraclePrices
 from gmx_python_sdk.scripts.v2.gmx_utils import get_contract_object
 from gmx_python_sdk.scripts.v2.utils.oracle import (
-    get_oracle_params,
     get_oracle_params_for_custom_oracle,
     get_oracle_params_for_simulation,
     TOKEN_ORACLE_TYPES,
@@ -54,7 +56,8 @@ def get_execute_params(fixture, params: dict[str, Any]) -> dict[str, list]:
         for token in tokens:
             price_info_item = default_price_info_items.get(token.address)
             if not price_info_item:
-                raise ValueError(f"Missing price info for token {token.address}")
+                msg = f"Missing price info for token {token.address}"
+                raise ValueError(msg)
 
             result_params["tokens"].append(token.address)
             result_params["precisions"].append(price_info_item["precision"])
@@ -241,14 +244,14 @@ def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle
         controller = "0xf5F30B10141E1F63FC11eD772931A8294a591996"
         oracle_contract = get_contract_object(config.get_web3_connection(), "oracle", config.chain)
         # * clear the price first
-        # oracle_contract.functions.clearAllPrices().transact({"from": controller})
+        oracle_contract.functions.clearAllPrices().transact({"from": controller})
         # ETH PRICE. WETH address: 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1
         # oracle_contract.functions.setPrimaryPrice(
         #     "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", (2505849875000000, 2505989682807298)
         # ).transact({"from": controller})
 
         # LINK price
-        # NOTE: address, (min_price, max_price)
+        # # NOTE: address, (min_price, max_price)
         # oracle_contract.functions.setPrimaryPrice(
         #     "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4", (16364090000000, 16373342000000)
         # ).transact({"from": controller})
@@ -258,10 +261,32 @@ def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle
         #     "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", (999923135340409600000000, 1000053137654175000000000)
         # ).transact({"from": controller})
 
-        # # SOL price
-        # oracle_contract.functions.setPrimaryPrice(
-        #     "0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07", (170177872499118025000000, 170192030000000000000000)
-        # ).transact({"from": controller})
+        oracle_prices = OraclePrices(chain="arbitrum").get_recent_prices()
+
+        max_price = int(
+            oracle_prices[to_checksum_address("0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a")]["maxPriceFull"]
+        )
+        min_price = int(
+            oracle_prices[to_checksum_address("0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a")]["minPriceFull"]
+        )
+        oracle_contract = get_contract_object(config.get_web3_connection(), "oracle", config.chain)
+        # GMX price
+        oracle_contract.functions.setPrimaryPrice(
+            to_checksum_address("0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a"), (min_price, max_price)
+        ).transact({"from": controller})
+
+        # USDC price
+        max_price = int(
+            oracle_prices[to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831")]["maxPriceFull"]
+        )
+        min_price = int(
+            oracle_prices[to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831")]["minPriceFull"]
+        )
+        
+        # GMX price
+        oracle_contract.functions.setPrimaryPrice(
+            to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831"), (min_price, max_price)
+        ).transact({"from": controller})
 
         # Build the transaction
         transaction = order_handler.functions.executeOrder(key, oracle_params).build_transaction(
