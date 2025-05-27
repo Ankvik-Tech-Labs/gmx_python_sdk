@@ -174,7 +174,7 @@ def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle
 
         # Handle block hash depending on its format
         block_hash = block.hash.hex() if isinstance(block.hash, bytes) else block.hash
-        block_hashes = [bytes.fromhex(block_hash)] * len(tokens)
+        block_hashes = [bytes.fromhex(block_hash).removeprefix("0x")] * len(tokens)
 
     # Prepare arguments for oracle parameters - no conditional checks needed now
     args = {
