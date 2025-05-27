@@ -332,9 +332,8 @@ def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle
             {
                 "from": keeper_address,  # to_checksum_address(active_signer.get_address()),
                 "nonce": nonce,
-                "gas": 90000000,  # Set appropriate gas limit
-                "maxFeePerGas": web3_provider.eth.gas_price * 200,  # Adjust as needed
-                "maxPriorityFeePerGas": web3_provider.eth.gas_price // 10,  # Adjust as needed
+                "gas": 90000000,
+                "gasPrice": web3_provider.eth.gas_price,
             }
         )
         # owner of order_handler 0xE7BfFf2aB721264887230037940490351700a068
