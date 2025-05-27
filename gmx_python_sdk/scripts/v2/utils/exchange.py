@@ -77,13 +77,15 @@ def get_execute_params(fixture, params: dict[str, Any]) -> dict[str, list]:
     return result_params
 
 
-def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle_address) -> Any:
+def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle_address, is_swap: bool = True) -> Any:
     """
     Execute a transaction with oracle parameters
 
     Args:
         fixture: Object containing account and contract references
         overrides: Parameters for execution including oracle info
+        deployed_oracle_address: Address of the deployed oracle contract
+        is_swap: Boolean indicating if this is a swap transaction. Defaults to True.
 
     Returns:
         Transaction receipt or simulation result
@@ -261,32 +263,35 @@ def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle
         #     "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", (999923135340409600000000, 1000053137654175000000000)
         # ).transact({"from": controller})
 
-        oracle_prices = OraclePrices(chain="arbitrum").get_recent_prices()
+        # ? for increase & decrease orders, we need to set the prices.
+        # Keep it hardcoded for now. Only supports postions in GMX/USDC market with USDC as collateral.
+        if not is_swap:
+            oracle_prices = OraclePrices(chain="arbitrum").get_recent_prices()
 
-        max_price = int(
-            oracle_prices[to_checksum_address("0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a")]["maxPriceFull"]
-        )
-        min_price = int(
-            oracle_prices[to_checksum_address("0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a")]["minPriceFull"]
-        )
-        oracle_contract = get_contract_object(config.get_web3_connection(), "oracle", config.chain)
-        # GMX price
-        oracle_contract.functions.setPrimaryPrice(
-            to_checksum_address("0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a"), (min_price, max_price)
-        ).transact({"from": controller})
+            max_price = int(
+                oracle_prices[to_checksum_address("0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a")]["maxPriceFull"]
+            )
+            min_price = int(
+                oracle_prices[to_checksum_address("0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a")]["minPriceFull"]
+            )
+            oracle_contract = get_contract_object(config.get_web3_connection(), "oracle", config.chain)
+            # GMX price
+            oracle_contract.functions.setPrimaryPrice(
+                to_checksum_address("0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a"), (min_price, max_price)
+            ).transact({"from": controller})
 
-        # USDC price
-        max_price = int(
-            oracle_prices[to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831")]["maxPriceFull"]
-        )
-        min_price = int(
-            oracle_prices[to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831")]["minPriceFull"]
-        )
-        
-        # GMX price
-        oracle_contract.functions.setPrimaryPrice(
-            to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831"), (min_price, max_price)
-        ).transact({"from": controller})
+            # USDC price
+            max_price = int(
+                oracle_prices[to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831")]["maxPriceFull"]
+            )
+            min_price = int(
+                oracle_prices[to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831")]["minPriceFull"]
+            )
+
+            # GMX price
+            oracle_contract.functions.setPrimaryPrice(
+                to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831"), (min_price, max_price)
+            ).transact({"from": controller})
 
         # Build the transaction
         transaction = order_handler.functions.executeOrder(key, oracle_params).build_transaction(

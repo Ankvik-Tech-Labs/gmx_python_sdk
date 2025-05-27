@@ -1,4 +1,3 @@
-from ctypes.wintypes import SHORT
 from decimal import Decimal
 import json
 from pathlib import Path
@@ -32,7 +31,7 @@ from eth_utils import keccak
 
 _set_paths()
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/4d5acfbc-7bb9-454b-b52c-a29df2eaa17f"
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/a131fa52-8d93-4292-b7ca-6c5c2dff46a8"
 TOKENS: dict[str] = {
     "USDC": to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831"),
     "SOL": to_checksum_address("0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07"),
@@ -61,7 +60,7 @@ ORDER_LIST = create_hash_string("ORDER_LIST")
 print = Console().print
 
 
-def execute_order(config, connection, order_key, deployed_oracle_address, logger=None, overrides=None):
+def execute_order(config, connection, order_key, deployed_oracle_address, logger=None, overrides=None, is_swap=True):
     """
     Execute an order with oracle prices
 
@@ -184,7 +183,9 @@ def execute_order(config, connection, order_key, deployed_oracle_address, logger
     }
 
     # Call execute_with_oracle_params with the built parameters
-    return execute_with_oracle_params(fixture, params, config, deployed_oracle_address=deployed_oracle_address)
+    return execute_with_oracle_params(
+        fixture, params, config, deployed_oracle_address=deployed_oracle_address, is_swap=is_swap
+    )
 
 
 GMX_ADMIN = "0x7A967D114B8676874FA2cFC1C14F3095C88418Eb"
@@ -645,7 +646,7 @@ def main(rpc="http://localhost:8545"):
         # token_b_min_value_slot: str = "0x636d2c90aa7802b40e3b1937e91c5450211eefbc7d3e39192aeb14ee03e3a959"
 
         # TODO: Fix the pricing & add pricing for market tokens as well
-        oracle_prices = OraclePrices(chain=parameters["chain"]).get_recent_prices()
+        # oracle_prices = OraclePrices(chain=parameters["chain"]).get_recent_prices()
 
         # # Index token price setup
         # max_price: int = int(oracle_prices[TOKENS[INDEX_TOKEN_SYMBOL]]["maxPriceFull"])
@@ -660,26 +661,15 @@ def main(rpc="http://localhost:8545"):
         # min_res = override_storage_slot(oracle_contract_address, token_b_min_value_slot, min_price, w3)
 
         # # Start/Initial token price setup
-        max_price = int(oracle_prices[TOKENS[INITIAL_TOKEN_SYMBOL]]["maxPriceFull"])
-        min_price = int(oracle_prices[TOKENS[INITIAL_TOKEN_SYMBOL]]["minPriceFull"])
+        # max_price = int(oracle_prices[TOKENS[INITIAL_TOKEN_SYMBOL]]["maxPriceFull"])
+        # min_price = int(oracle_prices[TOKENS[INITIAL_TOKEN_SYMBOL]]["minPriceFull"])
         # max_res = override_storage_slot(oracle_contract_address, token_b_max_value_slot, max_price, w3)
         # min_res = override_storage_slot(oracle_contract_address, token_b_min_value_slot, min_price, w3)
-
-        oracle_contract = get_contract_object(config.get_web3_connection(), "oracle", config.chain)
-        # SET PRICES
-        oracle_contract.functions.setPrimaryPrice(TOKENS[INITIAL_TOKEN_SYMBOL], (min_price, max_price)).transact(
-            {"from": controller}
-        )
 
         # print(f"Max price: {max_price}")
         # print(f"Min price: {min_price}")
         # print(f"Max res: {max_res}")
         # print(f"Min res: {min_res}")
-
-        # # ! Can't do it here
-        # oracle_contract_address = get_contract_object(config.get_web3_connection(), "oracle", config.chain)
-        # # ETH PRICE
-        # oracle_contract_address.functions.setPrimaryPrice(link_token_address, (2492652716024169, 2492891019455477)).transact({"from": controller})
 
         # print(f"Order key: {order_key.hex()}")
         overrides = {
@@ -698,6 +688,7 @@ def main(rpc="http://localhost:8545"):
             order_key=order_key,
             deployed_oracle_address=custom_oracle_provider,
             overrides=overrides,
+            is_swap=False,
         )
 
         # Check the balances after execution
