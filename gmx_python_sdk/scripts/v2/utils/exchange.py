@@ -77,6 +77,40 @@ def get_execute_params(fixture, params: dict[str, Any]) -> dict[str, list]:
     return result_params
 
 
+# Handle block hash conversion to bytes properly for all formats
+def get_block_hashes(block, tokens):
+    if block.hash is None:
+        # Handle the case when block hash is None
+        return [b"\x00" * 32] * len(tokens)  # Use null bytes as placeholder
+
+    # If block hash is already bytes, use it directly
+    if isinstance(block.hash, bytes):
+        block_hash_bytes = block.hash
+    # If it's HexBytes, convert to regular bytes
+    elif hasattr(block.hash, "hex") and callable(block.hash.hex):
+        block_hash_bytes = block.hash
+    # Handle hex string with '0x' prefix
+    elif isinstance(block.hash, str):
+        # Remove '0x' prefix if present
+        clean_hash = block.hash[2:] if block.hash.startswith("0x") else block.hash
+        try:
+            # Convert hex string to bytes
+            block_hash_bytes = bytes.fromhex(clean_hash)
+        except ValueError as e:
+            # Log the problematic hash for debugging
+            print(f"Error converting block hash: {block.hash}, type: {type(block.hash)}")
+            # Fallback to a safe default or raise custom error with more details
+            msg = f"Invalid block hash format: {block.hash}"
+            raise ValueError(msg) from e
+    else:
+        # Unknown format - raise a clear error
+        msg = f"Unsupported block hash type: {type(block.hash)}"
+        raise TypeError(msg)
+
+    # Create a list of the same block hash for each token
+    return [block_hash_bytes] * len(tokens)
+
+
 def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle_address, is_swap: bool = True) -> Any:
     """
     Execute a transaction with oracle parameters
@@ -136,7 +170,7 @@ def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle
 
     # Get blockchain block information
     block = web3_provider.eth.get_block(int(oracle_block_number))
-    print(f"Block number: {block.number}")
+    # print(f"Block number: {block.number}")
 
     # Default to standard oracle types if not provided
     token_oracle_types = overrides.get("tokenOracleTypes", [TOKEN_ORACLE_TYPES["DEFAULT"]] * len(tokens))
@@ -173,8 +207,8 @@ def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle
             oracle_timestamps = oracle_timestamps_from_overrides
 
         # Handle block hash depending on its format
-        block_hash = block.hash.hex() if isinstance(block.hash, bytes) else block.hash
-        block_hashes = [bytes.fromhex(block_hash).removeprefix("0x")] * len(tokens)
+        # block_hash = block.hash.hex() if isinstance(block.hash, bytes) else block.hash
+        block_hashes = get_block_hashes(block, tokens)
 
     # Prepare arguments for oracle parameters - no conditional checks needed now
     args = {
@@ -223,7 +257,7 @@ def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle
         keeper_address = "0xE47b36382DC50b90bCF6176Ddb159C4b9333A7AB"
         controller_address = "0xb6d37DFCdA9c237ca98215f9154Dc414EFe0aC1b"
         # Get full oracle parameters for execution
-        print(f"Args for oracle params: {args}")
+        # print(f"Args for oracle params: {args}")
         oracle_params = get_oracle_params_for_custom_oracle(
             config=config,
             keeper_address=keeper_address,
