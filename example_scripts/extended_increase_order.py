@@ -31,7 +31,7 @@ from eth_utils import keccak
 
 _set_paths()
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/a131fa52-8d93-4292-b7ca-6c5c2dff46a8"
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/55061a63-e9a6-4d75-aab5-e49e7a19afe5"
 TOKENS: dict[str] = {
     "USDC": to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831"),
     "SOL": to_checksum_address("0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07"),
@@ -44,8 +44,8 @@ TOKENS: dict[str] = {
 # the token to start with
 INITIAL_TOKEN_SYMBOL: str = "USDC"
 # the market you want to trade on
-INDEX_TOKEN_SYMBOL: str = "GMX"
-COLLATERAL_TOKEN_SYMBOL: str = "GMX"
+INDEX_TOKEN_SYMBOL: str = "LINK"
+COLLATERAL_TOKEN_SYMBOL: str = "LINK"
 
 # ? This setup will trade on INDEX_TOKEN_SYMBOL market using COLLATERAL_TOKEN_SYMBOL as collateral
 # ? If INITIAL_TOKEN_SYMBOL is different from COLLATERAL_TOKEN_SYMBOL,

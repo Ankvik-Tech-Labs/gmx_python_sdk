@@ -298,20 +298,20 @@ def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle
         # ).transact({"from": controller})
 
         # ? for increase & decrease orders, we need to set the prices.
-        # Keep it hardcoded for now. Only supports postions in GMX/USDC market with USDC as collateral.
+        # Keep it hardcoded for now. Only supports postions in ARB/USDC market with USDC as collateral.
         if not is_swap:
             oracle_prices = OraclePrices(chain="arbitrum").get_recent_prices()
 
             max_price = int(
-                oracle_prices[to_checksum_address("0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a")]["maxPriceFull"]
+                oracle_prices[to_checksum_address("0xf97f4df75117a78c1a5a0dbb814af92458539fb4")]["maxPriceFull"]
             )
             min_price = int(
-                oracle_prices[to_checksum_address("0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a")]["minPriceFull"]
+                oracle_prices[to_checksum_address("0xf97f4df75117a78c1a5a0dbb814af92458539fb4")]["minPriceFull"]
             )
             oracle_contract = get_contract_object(config.get_web3_connection(), "oracle", config.chain)
-            # GMX price
+            # LINK price
             oracle_contract.functions.setPrimaryPrice(
-                to_checksum_address("0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a"), (min_price, max_price)
+                to_checksum_address("0xf97f4df75117a78c1a5a0dbb814af92458539fb4"), (min_price, max_price)
             ).transact({"from": controller})
 
             # USDC price
@@ -322,7 +322,7 @@ def execute_with_oracle_params(fixture, overrides: dict, config, deployed_oracle
                 oracle_prices[to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831")]["minPriceFull"]
             )
 
-            # GMX price
+            # USDC price
             oracle_contract.functions.setPrimaryPrice(
                 to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831"), (min_price, max_price)
             ).transact({"from": controller})
