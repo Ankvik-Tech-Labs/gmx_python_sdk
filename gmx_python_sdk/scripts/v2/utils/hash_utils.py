@@ -56,7 +56,7 @@ def hash_data(data_types: list[str], data_values: list[Any]) -> HexBytes:
         keccak256 hash of encoded data
     """
     encoded = encode(data_types, data_values)
-    return keccak(encoded)
+    return HexBytes(keccak(encoded))
 
 
 def hash_string(string: str) -> HexBytes:
