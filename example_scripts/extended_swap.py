@@ -8,7 +8,11 @@ from example_scripts.anvil_set import set_opt_code
 from gmx_python_sdk.scripts.v2.order import deposit
 from gmx_python_sdk.scripts.v2.utils.exchange import execute_with_oracle_params
 from gmx_python_sdk.scripts.v2.utils.hash_utils import hash_data
-from gmx_python_sdk.scripts.v2.utils.keys import IS_ORACLE_PROVIDER_ENABLED, MAX_ORACLE_REF_PRICE_DEVIATION_FACTOR
+from gmx_python_sdk.scripts.v2.utils.keys import (
+    IS_ORACLE_PROVIDER_ENABLED,
+    MAX_ORACLE_REF_PRICE_DEVIATION_FACTOR,
+    oracle_provider_for_token_key,
+)
 from utils import _set_paths
 
 _set_paths()
@@ -30,16 +34,17 @@ from eth_abi import encode
 from eth_utils import keccak
 
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/baf0d3c9-8fd2-4b15-9bd0-44448c270fbc"
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/b6f6d459-9015-4c07-9406-cbbbfd465b1d"
 TOKENS: dict[str] = {
     "USDC": to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831"),
     "SOL": to_checksum_address("0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07"),
     "ARB": to_checksum_address("0x912ce59144191c1204e64559fe8253a0e49e6548"),
     "LINK": to_checksum_address("0xf97f4df75117a78c1A5a0DBb814Af92458539FB4"),
+    "AAVE": to_checksum_address("0xba5DdD1f9d7F570dc94a51479a000E3BCE967196"),
 }
 
-INITIAL_TOKEN_SYMBOL: str = "ARB"
-TARGET_TOKEN_SYMBOL: str = "SOL"
+INITIAL_TOKEN_SYMBOL: str = "USDC"
+TARGET_TOKEN_SYMBOL: str = "AAVE"
 
 initial_token_address: str = TOKENS[INITIAL_TOKEN_SYMBOL]
 target_token_address: str = TOKENS[TARGET_TOKEN_SYMBOL]
@@ -634,20 +639,22 @@ def main(rpc="http://localhost:8545"):
         assert value == large_value, f"Value should be {large_value}"
 
         oracle_contract: str = "0x918b60ba71badfada72ef3a6c6f71d0c41d4785c"
-        token_b_max_value_slot: str = "0x636d2c90aa7802b40e3b1937e91c5450211eefbc7d3e39192aeb14ee03e3a958"
-        token_b_min_value_slot: str = "0x636d2c90aa7802b40e3b1937e91c5450211eefbc7d3e39192aeb14ee03e3a959"
+        # Slot for ARB = "0x636d2c90aa7802b40e3b1937e91c5450211eefbc7d3e39192aeb14ee03e3a958"
+        slot = oracle_provider_for_token_key(TOKENS[TARGET_TOKEN_SYMBOL]).to_0x_hex()
+        # token_b_max_value_slot: str = "0x636d2c90aa7802b40e3b1937e91c5450211eefbc7d3e39192aeb14ee03e3a958"
+        # token_b_min_value_slot: str = "0x636d2c90aa7802b40e3b1937e91c5450211eefbc7d3e39192aeb14ee03e3a959"
 
         oracle_prices = OraclePrices(chain=parameters["chain"]).get_recent_prices()
 
         max_price: int = int(oracle_prices[TOKENS[TARGET_TOKEN_SYMBOL]]["maxPriceFull"])
         min_price: int = int(oracle_prices[TOKENS[TARGET_TOKEN_SYMBOL]]["minPriceFull"])
-        max_res = override_storage_slot(oracle_contract, token_b_max_value_slot, max_price, w3)
-        min_res = override_storage_slot(oracle_contract, token_b_min_value_slot, min_price, w3)
+        max_res = override_storage_slot(oracle_contract, slot, max_price, w3)
+        # min_res = override_storage_slot(oracle_contract, token_b_min_value_slot, min_price, w3)
 
         print(f"Max price: {max_price}")
         print(f"Min price: {min_price}")
         print(f"Max res: {max_res}")
-        print(f"Min res: {min_res}")
+        # print(f"Min res: {min_res}")
 
         # # ! Can't do it here
         # oracle_contract = get_contract_object(config.get_web3_connection(), "oracle", config.chain)
