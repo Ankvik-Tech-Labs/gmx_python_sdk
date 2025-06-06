@@ -34,7 +34,7 @@ from eth_abi import encode
 from eth_utils import keccak
 
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/ff69e3f3-b7cb-4c0e-9961-da24a007b954"
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/6224bfb1-f8b1-4283-a50a-c9dfc04e9f73"
 TOKENS: dict[str] = {
     "USDC": to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831"),
     "SOL": to_checksum_address("0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07"),
