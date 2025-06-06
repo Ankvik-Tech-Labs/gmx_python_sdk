@@ -34,7 +34,7 @@ from eth_abi import encode
 from eth_utils import keccak
 
 
-JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/b6f6d459-9015-4c07-9406-cbbbfd465b1d"
+JSON_RPC_BASE = "https://virtual.arbitrum.rpc.tenderly.co/ff69e3f3-b7cb-4c0e-9961-da24a007b954"
 TOKENS: dict[str] = {
     "USDC": to_checksum_address("0xaf88d065e77c8cC2239327C5EDb3A432268e5831"),
     "SOL": to_checksum_address("0x2bcC6D6CdBbDC0a4071e48bb3B969b06B3330c07"),
@@ -607,6 +607,8 @@ def main(rpc="http://localhost:8545"):
         # TODO: This will change for various tokens apparently
         # pass the test `address expectedProvider = dataStore.getAddress(Keys.oracleProviderForTokenKey(token));` in Oracle.sol#L278
         address_slot: str = "0x233a49594db4e7a962a8bd9ec7298b99d6464865065bd50d94232b61d213f16d"
+        address_slot = oracle_provider_for_token_key(TOKENS[TARGET_TOKEN_SYMBOL]).to_0x_hex()
+        print(f"Address slot: {address_slot}")
         data_store.functions.setAddress(address_slot, custom_oracle_provider).transact({"from": controller})
 
         new_address = data_store.functions.getAddress(address_slot).call()
@@ -643,6 +645,7 @@ def main(rpc="http://localhost:8545"):
         slot = oracle_provider_for_token_key(TOKENS[TARGET_TOKEN_SYMBOL]).to_0x_hex()
         # token_b_max_value_slot: str = "0x636d2c90aa7802b40e3b1937e91c5450211eefbc7d3e39192aeb14ee03e3a958"
         # token_b_min_value_slot: str = "0x636d2c90aa7802b40e3b1937e91c5450211eefbc7d3e39192aeb14ee03e3a959"
+        print(f"{slot=}")
 
         oracle_prices = OraclePrices(chain=parameters["chain"]).get_recent_prices()
 
